@@ -14,11 +14,29 @@
       "backgroundColor": "#0A0A0F"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.skillect.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Skillect needs camera access to let you set a profile photo.",
+        "NSPhotoLibraryUsageDescription": "Skillect needs photo library access to let you upload photos."
+      }
     },
-    "android": {},
+    "android": {
+      "package": "com.skillect.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#0A0A0F"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES"
+      ]
+    },
     "web": {
-      "favicon": "./assets/images/icon.png"
+      "favicon": "./assets/images/icon.png",
+      "name": "Skillect",
+      "shortName": "Skillect",
+      "description": "The social platform for builders and learners"
     },
     "plugins": [
       [
@@ -28,7 +46,14 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Skillect needs access to your photos so you can set a profile picture.",
+          "cameraPermission": "Skillect needs camera access to take a profile photo."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
