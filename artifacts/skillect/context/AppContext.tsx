@@ -13,11 +13,15 @@ export interface Post {
   id: string;
   userId: string;
   username: string;
+  displayName?: string;
+  avatarUri?: string;
   content: string;
   imageUri?: string;
   skillTag: string;
-  progressDay: number;
+  progressDay?: number;
+  postType: "text" | "image" | "progress";
   likedBy: string[];
+  savedBy: string[];
   commentCount: number;
   createdAt: string;
 }
@@ -27,6 +31,8 @@ export interface Comment {
   postId: string;
   userId: string;
   username: string;
+  displayName?: string;
+  avatarUri?: string;
   content: string;
   createdAt: string;
 }
@@ -34,110 +40,209 @@ export interface Comment {
 export interface UserProfile {
   userId: string;
   username: string;
+  displayName: string;
   bio: string;
   skills: string[];
+  customSkills: string[];
+  interests: string[];
+  currentlyBuilding: string;
+  avatarUri?: string;
   onboardingCompleted: boolean;
+  followers: string[];
+  joinedAt: string;
 }
 
-const POSTS_KEY = "skillect_posts";
-const COMMENTS_KEY = "skillect_comments";
-const PROFILES_KEY = "skillect_profiles";
+export interface Message {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface Conversation {
+  id: string;
+  otherUserId: string;
+  otherUsername: string;
+  otherDisplayName: string;
+  otherAvatarUri?: string;
+  lastMessage: string;
+  lastMessageTime: string;
+  unreadCount: number;
+}
+
+const K = {
+  POSTS: "sk_posts_v3",
+  PROFILE: "sk_profile_v3",
+  FOLLOWS: "sk_follows_v3",
+  SAVED: "sk_saved_v3",
+  CONVS: "sk_convs_v3",
+  MSGS: "sk_msgs_v3",
+  COMMENTS: "sk_comments_v3",
+  INIT: "sk_seeds_v3",
+};
+
+const SEED_PROFILES: UserProfile[] = [
+  {
+    userId: "seed_1",
+    username: "aryan_codes",
+    displayName: "Aryan Sharma",
+    bio: "Self-taught developer from Mumbai. Building apps and learning to think in systems. Shipping daily.",
+    skills: ["coding", "aiml", "webdev"],
+    customSkills: [],
+    interests: ["tech", "startups"],
+    currentlyBuilding: "A productivity app for students",
+    onboardingCompleted: true,
+    followers: ["seed_2", "seed_3"],
+    joinedAt: new Date(Date.now() - 90 * 86400000).toISOString(),
+  },
+  {
+    userId: "seed_2",
+    username: "priya_trades",
+    displayName: "Priya Mehta",
+    bio: "Learning technical analysis and building wealth, one trade at a time. Pune. 28-day streak.",
+    skills: ["trading", "finance", "investing"],
+    customSkills: [],
+    interests: ["finance", "business"],
+    currentlyBuilding: "A trading journal & analytics app",
+    onboardingCompleted: true,
+    followers: ["seed_1"],
+    joinedAt: new Date(Date.now() - 60 * 86400000).toISOString(),
+  },
+  {
+    userId: "seed_3",
+    username: "rishi_builds",
+    displayName: "Rishi Kapoor",
+    bio: "Freelancer turned founder. Design + marketing. Bangalore. Building in public since day 1.",
+    skills: ["design", "freelancing", "marketing"],
+    customSkills: [],
+    interests: ["design", "startups", "content"],
+    currentlyBuilding: "A freelancer toolkit SaaS",
+    onboardingCompleted: true,
+    followers: ["seed_1", "seed_2"],
+    joinedAt: new Date(Date.now() - 120 * 86400000).toISOString(),
+  },
+];
 
 const SEED_POSTS: Post[] = [
   {
-    id: "seed_1",
-    userId: "seed_user_1",
+    id: "post_1",
+    userId: "seed_1",
     username: "aryan_codes",
+    displayName: "Aryan Sharma",
     content:
-      "Just built my first React Native app from scratch. 30 days ago I couldn't even center a div. The consistency is paying off.",
+      "Day 42 — shipped my first working API today. Async/await finally clicked. It's not magic anymore, it's just code.",
     skillTag: "coding",
-    progressDay: 30,
-    likedBy: ["seed_user_2", "seed_user_3"],
-    commentCount: 3,
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "seed_2",
-    userId: "seed_user_2",
-    username: "priya_trades",
-    content:
-      "Finally understood support & resistance after weeks of backtesting on Nifty. The market teaches you more than any course.",
-    skillTag: "trading",
-    progressDay: 45,
-    likedBy: ["seed_user_1"],
-    commentCount: 5,
-    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "seed_3",
-    userId: "seed_user_3",
-    username: "rishi_builds",
-    content:
-      "Landed my first freelance client. Rs 15,000 for a landing page. 90 days ago I didn't even know what a wireframe was.",
-    skillTag: "freelancing",
-    progressDay: 90,
-    likedBy: ["seed_user_1", "seed_user_2", "seed_user_4"],
-    commentCount: 8,
-    createdAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "seed_4",
-    userId: "seed_user_4",
-    username: "meghna_creates",
-    content:
-      "Posted my first YouTube video. Only 14 views but I showed up. Day 1 is always the hardest. Not stopping till 100.",
-    skillTag: "youtube",
-    progressDay: 1,
-    likedBy: ["seed_user_2"],
-    commentCount: 2,
-    createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "seed_5",
-    userId: "seed_user_5",
-    username: "dev_rohan",
-    content:
-      "Reading a balance sheet used to feel impossible. 15 days in and I can now analyze a company's financials in under 10 minutes.",
-    skillTag: "finance",
-    progressDay: 15,
-    likedBy: ["seed_user_3", "seed_user_1"],
+    progressDay: 42,
+    postType: "progress",
+    likedBy: ["seed_2", "seed_3"],
+    savedBy: [],
     commentCount: 4,
-    createdAt: new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 3 * 3600000).toISOString(),
   },
   {
-    id: "seed_6",
-    userId: "seed_user_6",
-    username: "siya_markets",
+    id: "post_2",
+    userId: "seed_2",
+    username: "priya_trades",
+    displayName: "Priya Mehta",
     content:
-      "Ran my first Google Ads campaign today. CTR was 3.2% which apparently is above average. Starting to connect the dots.",
-    skillTag: "marketing",
-    progressDay: 22,
-    likedBy: ["seed_user_1", "seed_user_5"],
+      "Called the Nifty reversal today using RSI divergence. Backtested this setup 200 times before going live. The invisible work compounds.",
+    skillTag: "trading",
+    progressDay: 28,
+    postType: "progress",
+    likedBy: ["seed_1"],
+    savedBy: ["seed_3"],
     commentCount: 6,
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 6 * 3600000).toISOString(),
+  },
+  {
+    id: "post_3",
+    userId: "seed_3",
+    username: "rishi_builds",
+    displayName: "Rishi Kapoor",
+    content:
+      "Closed my third freelance client this week. Started cold outreaching 67 days ago with zero portfolio. Consistency beats talent, every time.",
+    skillTag: "freelancing",
+    progressDay: 67,
+    postType: "progress",
+    likedBy: ["seed_1", "seed_2"],
+    savedBy: [],
+    commentCount: 9,
+    createdAt: new Date(Date.now() - 10 * 3600000).toISOString(),
+  },
+  {
+    id: "post_4",
+    userId: "seed_1",
+    username: "aryan_codes",
+    displayName: "Aryan Sharma",
+    content:
+      "The best way to learn programming is to build something you actually want to use. Tutorials give knowledge. Projects give intuition.",
+    skillTag: "coding",
+    postType: "text",
+    likedBy: ["seed_2", "seed_3"],
+    savedBy: ["seed_2"],
+    commentCount: 12,
+    createdAt: new Date(Date.now() - 22 * 3600000).toISOString(),
+  },
+  {
+    id: "post_5",
+    userId: "seed_2",
+    username: "priya_trades",
+    displayName: "Priya Mehta",
+    content:
+      "The market taught me a lesson I keep relearning: emotions are the enemy. Set up the trade, walk away, let the thesis play out.",
+    skillTag: "trading",
+    postType: "text",
+    likedBy: ["seed_3"],
+    savedBy: [],
+    commentCount: 3,
+    createdAt: new Date(Date.now() - 30 * 3600000).toISOString(),
   },
 ];
+
+function uid9() {
+  return Date.now().toString() + Math.random().toString(36).substring(2, 9);
+}
 
 interface AppContextType {
   posts: Post[];
   currentUserProfile: UserProfile | null;
+  currentUserFollowing: string[];
+  savedPostIds: string[];
   isLoadingProfile: boolean;
   addPost: (
-    post: Omit<Post, "id" | "likedBy" | "commentCount" | "createdAt">
+    p: Omit<Post, "id" | "likedBy" | "savedBy" | "commentCount" | "createdAt">
   ) => Promise<void>;
-  toggleLike: (postId: string, userId: string) => Promise<void>;
+  toggleLike: (postId: string) => Promise<void>;
+  toggleSave: (postId: string) => Promise<void>;
+  followUser: (targetId: string) => Promise<void>;
+  unfollowUser: (targetId: string) => Promise<void>;
+  isFollowing: (targetId: string) => boolean;
   getComments: (postId: string) => Promise<Comment[]>;
-  addComment: (comment: Omit<Comment, "id" | "createdAt">) => Promise<void>;
+  addComment: (c: Omit<Comment, "id" | "createdAt">) => Promise<void>;
   saveUserProfile: (profile: UserProfile) => Promise<void>;
   getUserProfile: (userId: string) => Promise<UserProfile | null>;
   getPostsByUser: (userId: string) => Post[];
+  getFeedPosts: () => Post[];
+  getAllProfiles: () => Promise<UserProfile[]>;
+  getConversations: () => Promise<Conversation[]>;
+  getMessages: (convId: string) => Promise<Message[]>;
+  sendMessage: (
+    toUserId: string,
+    toUsername: string,
+    toDisplayName: string,
+    toAvatarUri: string | undefined,
+    content: string
+  ) => Promise<void>;
+  getFollowerCount: (userId: string) => Promise<number>;
+  getFollowingCount: (userId: string) => Promise<number>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
 
 export function useAppContext() {
   const ctx = useContext(AppContext);
-  if (!ctx) throw new Error("useAppContext must be used within AppProvider");
+  if (!ctx) throw new Error("useAppContext must be inside AppProvider");
   return ctx;
 }
 
@@ -146,40 +251,60 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [currentUserProfile, setCurrentUserProfile] =
     useState<UserProfile | null>(null);
+  const [currentUserFollowing, setCurrentUserFollowing] = useState<string[]>(
+    []
+  );
+  const [savedPostIds, setSavedPostIds] = useState<string[]>([]);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
   useEffect(() => {
-    loadPosts();
+    initSeeds();
   }, []);
 
   useEffect(() => {
     if (userId) {
-      loadCurrentUserProfile(userId);
+      loadUserData(userId);
     } else {
       setCurrentUserProfile(null);
+      setCurrentUserFollowing([]);
+      setSavedPostIds([]);
       setIsLoadingProfile(false);
     }
   }, [userId]);
 
-  const loadPosts = async () => {
+  const initSeeds = async () => {
     try {
-      const stored = await AsyncStorage.getItem(POSTS_KEY);
-      if (stored) {
-        setPosts(JSON.parse(stored) as Post[]);
-      } else {
-        await AsyncStorage.setItem(POSTS_KEY, JSON.stringify(SEED_POSTS));
+      const inited = await AsyncStorage.getItem(K.INIT);
+      if (!inited) {
+        for (const p of SEED_PROFILES) {
+          await AsyncStorage.setItem(`${K.PROFILE}_${p.userId}`, JSON.stringify(p));
+        }
+        await AsyncStorage.setItem(`${K.FOLLOWS}_seed_1`, JSON.stringify(["seed_2", "seed_3"]));
+        await AsyncStorage.setItem(`${K.FOLLOWS}_seed_2`, JSON.stringify(["seed_1"]));
+        await AsyncStorage.setItem(`${K.FOLLOWS}_seed_3`, JSON.stringify(["seed_1", "seed_2"]));
+        await AsyncStorage.setItem(K.POSTS, JSON.stringify(SEED_POSTS));
+        await AsyncStorage.setItem(K.INIT, "true");
         setPosts(SEED_POSTS);
+      } else {
+        const stored = await AsyncStorage.getItem(K.POSTS);
+        setPosts(stored ? JSON.parse(stored) : SEED_POSTS);
       }
     } catch {
       setPosts(SEED_POSTS);
     }
   };
 
-  const loadCurrentUserProfile = async (uid: string) => {
+  const loadUserData = async (uid: string) => {
     setIsLoadingProfile(true);
     try {
-      const stored = await AsyncStorage.getItem(`${PROFILES_KEY}_${uid}`);
-      setCurrentUserProfile(stored ? (JSON.parse(stored) as UserProfile) : null);
+      const [pStr, fStr, sStr] = await Promise.all([
+        AsyncStorage.getItem(`${K.PROFILE}_${uid}`),
+        AsyncStorage.getItem(`${K.FOLLOWS}_${uid}`),
+        AsyncStorage.getItem(`${K.SAVED}_${uid}`),
+      ]);
+      setCurrentUserProfile(pStr ? JSON.parse(pStr) : null);
+      setCurrentUserFollowing(fStr ? JSON.parse(fStr) : []);
+      setSavedPostIds(sStr ? JSON.parse(sStr) : []);
     } catch {
       setCurrentUserProfile(null);
     } finally {
@@ -187,90 +312,142 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const savePosts = async (updated: Post[]) => {
+    setPosts(updated);
+    await AsyncStorage.setItem(K.POSTS, JSON.stringify(updated));
+  };
+
   const addPost = useCallback(
     async (
-      postData: Omit<Post, "id" | "likedBy" | "commentCount" | "createdAt">
+      data: Omit<Post, "id" | "likedBy" | "savedBy" | "commentCount" | "createdAt">
     ) => {
-      const newPost: Post = {
-        ...postData,
-        id:
-          Date.now().toString() + Math.random().toString(36).substring(2, 9),
+      const np: Post = {
+        ...data,
+        id: uid9(),
         likedBy: [],
+        savedBy: [],
         commentCount: 0,
         createdAt: new Date().toISOString(),
       };
-      const updated = [newPost, ...posts];
-      setPosts(updated);
-      await AsyncStorage.setItem(POSTS_KEY, JSON.stringify(updated));
+      await savePosts([np, ...posts]);
     },
     [posts]
   );
 
   const toggleLike = useCallback(
-    async (postId: string, uid: string) => {
-      const updated = posts.map((p) => {
-        if (p.id !== postId) return p;
-        const liked = p.likedBy.includes(uid);
-        return {
-          ...p,
-          likedBy: liked
-            ? p.likedBy.filter((id) => id !== uid)
-            : [...p.likedBy, uid],
-        };
-      });
-      setPosts(updated);
-      await AsyncStorage.setItem(POSTS_KEY, JSON.stringify(updated));
+    async (postId: string) => {
+      if (!userId) return;
+      await savePosts(
+        posts.map((p) => {
+          if (p.id !== postId) return p;
+          const has = p.likedBy.includes(userId);
+          return {
+            ...p,
+            likedBy: has ? p.likedBy.filter((x) => x !== userId) : [...p.likedBy, userId],
+          };
+        })
+      );
     },
-    [posts]
+    [posts, userId]
+  );
+
+  const toggleSave = useCallback(
+    async (postId: string) => {
+      if (!userId) return;
+      const next = savedPostIds.includes(postId)
+        ? savedPostIds.filter((x) => x !== postId)
+        : [...savedPostIds, postId];
+      setSavedPostIds(next);
+      await AsyncStorage.setItem(`${K.SAVED}_${userId}`, JSON.stringify(next));
+      await savePosts(
+        posts.map((p) => {
+          if (p.id !== postId) return p;
+          const has = p.savedBy.includes(userId);
+          return {
+            ...p,
+            savedBy: has ? p.savedBy.filter((x) => x !== userId) : [...p.savedBy, userId],
+          };
+        })
+      );
+    },
+    [posts, savedPostIds, userId]
+  );
+
+  const followUser = useCallback(
+    async (targetId: string) => {
+      if (!userId) return;
+      const next = [...currentUserFollowing, targetId];
+      setCurrentUserFollowing(next);
+      await AsyncStorage.setItem(`${K.FOLLOWS}_${userId}`, JSON.stringify(next));
+      const tStr = await AsyncStorage.getItem(`${K.PROFILE}_${targetId}`);
+      if (tStr) {
+        const tp = JSON.parse(tStr) as UserProfile;
+        if (!tp.followers.includes(userId)) {
+          tp.followers = [...tp.followers, userId];
+          await AsyncStorage.setItem(`${K.PROFILE}_${targetId}`, JSON.stringify(tp));
+        }
+      }
+    },
+    [currentUserFollowing, userId]
+  );
+
+  const unfollowUser = useCallback(
+    async (targetId: string) => {
+      if (!userId) return;
+      const next = currentUserFollowing.filter((x) => x !== targetId);
+      setCurrentUserFollowing(next);
+      await AsyncStorage.setItem(`${K.FOLLOWS}_${userId}`, JSON.stringify(next));
+      const tStr = await AsyncStorage.getItem(`${K.PROFILE}_${targetId}`);
+      if (tStr) {
+        const tp = JSON.parse(tStr) as UserProfile;
+        tp.followers = tp.followers.filter((x) => x !== userId);
+        await AsyncStorage.setItem(`${K.PROFILE}_${targetId}`, JSON.stringify(tp));
+      }
+    },
+    [currentUserFollowing, userId]
+  );
+
+  const isFollowing = useCallback(
+    (targetId: string) => currentUserFollowing.includes(targetId),
+    [currentUserFollowing]
   );
 
   const getComments = useCallback(async (postId: string): Promise<Comment[]> => {
     try {
-      const stored = await AsyncStorage.getItem(`${COMMENTS_KEY}_${postId}`);
-      return stored ? (JSON.parse(stored) as Comment[]) : [];
+      const s = await AsyncStorage.getItem(`${K.COMMENTS}_${postId}`);
+      return s ? JSON.parse(s) : [];
     } catch {
       return [];
     }
   }, []);
 
   const addComment = useCallback(
-    async (commentData: Omit<Comment, "id" | "createdAt">) => {
-      const comment: Comment = {
-        ...commentData,
-        id:
-          Date.now().toString() + Math.random().toString(36).substring(2, 9),
-        createdAt: new Date().toISOString(),
-      };
-      const existing = await getComments(commentData.postId);
-      const updatedComments = [...existing, comment];
+    async (data: Omit<Comment, "id" | "createdAt">) => {
+      const c: Comment = { ...data, id: uid9(), createdAt: new Date().toISOString() };
+      const existing = await getComments(data.postId);
       await AsyncStorage.setItem(
-        `${COMMENTS_KEY}_${commentData.postId}`,
-        JSON.stringify(updatedComments)
+        `${K.COMMENTS}_${data.postId}`,
+        JSON.stringify([...existing, c])
       );
-      const updatedPosts = posts.map((p) =>
-        p.id === commentData.postId
-          ? { ...p, commentCount: p.commentCount + 1 }
-          : p
+      await savePosts(
+        posts.map((p) =>
+          p.id === data.postId ? { ...p, commentCount: p.commentCount + 1 } : p
+        )
       );
-      setPosts(updatedPosts);
-      await AsyncStorage.setItem(POSTS_KEY, JSON.stringify(updatedPosts));
     },
     [getComments, posts]
   );
 
   const saveUserProfile = useCallback(async (profile: UserProfile) => {
     setCurrentUserProfile(profile);
-    await AsyncStorage.setItem(
-      `${PROFILES_KEY}_${profile.userId}`,
-      JSON.stringify(profile)
-    );
+    await AsyncStorage.setItem(`${K.PROFILE}_${profile.userId}`, JSON.stringify(profile));
   }, []);
 
   const getUserProfile = useCallback(
     async (uid: string): Promise<UserProfile | null> => {
       try {
-        const stored = await AsyncStorage.getItem(`${PROFILES_KEY}_${uid}`);
-        return stored ? (JSON.parse(stored) as UserProfile) : null;
+        const s = await AsyncStorage.getItem(`${K.PROFILE}_${uid}`);
+        return s ? JSON.parse(s) : null;
       } catch {
         return null;
       }
@@ -279,23 +456,129 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const getPostsByUser = useCallback(
-    (uid: string): Post[] => posts.filter((p) => p.userId === uid),
+    (uid: string) => posts.filter((p) => p.userId === uid),
     [posts]
   );
+
+  const getFeedPosts = useCallback(() => {
+    const priority = new Set([...currentUserFollowing, ...(userId ? [userId] : [])]);
+    const hi = posts.filter((p) => priority.has(p.userId));
+    const lo = posts.filter((p) => !priority.has(p.userId));
+    const byDate = (a: Post, b: Post) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    return [...hi.sort(byDate), ...lo.sort(byDate)];
+  }, [posts, currentUserFollowing, userId]);
+
+  const getAllProfiles = useCallback(async (): Promise<UserProfile[]> => {
+    const out: UserProfile[] = [];
+    for (const sp of SEED_PROFILES) {
+      const s = await AsyncStorage.getItem(`${K.PROFILE}_${sp.userId}`);
+      if (s) out.push(JSON.parse(s));
+    }
+    if (userId && currentUserProfile) out.push(currentUserProfile);
+    return out;
+  }, [userId, currentUserProfile]);
+
+  const getConversations = useCallback(async (): Promise<Conversation[]> => {
+    if (!userId) return [];
+    try {
+      const s = await AsyncStorage.getItem(`${K.CONVS}_${userId}`);
+      return s ? JSON.parse(s) : [];
+    } catch {
+      return [];
+    }
+  }, [userId]);
+
+  const getMessages = useCallback(async (convId: string): Promise<Message[]> => {
+    try {
+      const s = await AsyncStorage.getItem(`${K.MSGS}_${convId}`);
+      return s ? JSON.parse(s) : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const sendMessage = useCallback(
+    async (
+      toUserId: string,
+      toUsername: string,
+      toDisplayName: string,
+      toAvatarUri: string | undefined,
+      content: string
+    ) => {
+      if (!userId || !currentUserProfile) return;
+      const convId = [userId, toUserId].sort().join("_");
+      const msg: Message = {
+        id: uid9(),
+        conversationId: convId,
+        senderId: userId,
+        content,
+        createdAt: new Date().toISOString(),
+      };
+      const existing = await getMessages(convId);
+      await AsyncStorage.setItem(`${K.MSGS}_${convId}`, JSON.stringify([...existing, msg]));
+      const convs = await getConversations();
+      const idx = convs.findIndex((c) => c.id === convId);
+      const conv: Conversation = {
+        id: convId,
+        otherUserId: toUserId,
+        otherUsername: toUsername,
+        otherDisplayName: toDisplayName,
+        otherAvatarUri: toAvatarUri,
+        lastMessage: content,
+        lastMessageTime: msg.createdAt,
+        unreadCount: 0,
+      };
+      if (idx >= 0) convs[idx] = { ...convs[idx], ...conv };
+      else convs.unshift(conv);
+      await AsyncStorage.setItem(`${K.CONVS}_${userId}`, JSON.stringify(convs));
+    },
+    [userId, currentUserProfile, getMessages, getConversations]
+  );
+
+  const getFollowerCount = useCallback(
+    async (uid: string): Promise<number> => {
+      const p = await getUserProfile(uid);
+      return p?.followers.length ?? 0;
+    },
+    [getUserProfile]
+  );
+
+  const getFollowingCount = useCallback(async (uid: string): Promise<number> => {
+    try {
+      const s = await AsyncStorage.getItem(`${K.FOLLOWS}_${uid}`);
+      return s ? (JSON.parse(s) as string[]).length : 0;
+    } catch {
+      return 0;
+    }
+  }, []);
 
   return (
     <AppContext.Provider
       value={{
         posts,
         currentUserProfile,
+        currentUserFollowing,
+        savedPostIds,
         isLoadingProfile,
         addPost,
         toggleLike,
+        toggleSave,
+        followUser,
+        unfollowUser,
+        isFollowing,
         getComments,
         addComment,
         saveUserProfile,
         getUserProfile,
         getPostsByUser,
+        getFeedPosts,
+        getAllProfiles,
+        getConversations,
+        getMessages,
+        sendMessage,
+        getFollowerCount,
+        getFollowingCount,
       }}
     >
       {children}

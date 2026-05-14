@@ -1,6 +1,6 @@
 import { useAuth } from "@clerk/expo";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -12,28 +12,37 @@ import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
+  Share,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useAppContext, Comment, Post } from "@/context/AppContext";
+import { useAppContext, Comment } from "@/context/AppContext";
 import { getSkillColor, getSkillName } from "@/constants/skills";
+import { Avatar } from "../(tabs)/index";
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "now";
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h`;
-  return `${Math.floor(hrs / 24)}d`;
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "now";
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
 }
 
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { userId } = useAuth();
-  const { posts, toggleLike, getComments, addComment, currentUserProfile } =
-    useAppContext();
+  const {
+    posts,
+    toggleLike,
+    toggleSave,
+    savedPostIds,
+    getComments,
+    addComment,
+    currentUserProfile,
+  } = useAppContext();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -44,6 +53,7 @@ export default function PostDetailScreen() {
   const [isSending, setIsSending] = useState(false);
 
   const isLiked = userId ? post?.likedBy.includes(userId) ?? false : false;
+  const isSaved = savedPostIds.includes(id ?? "");
   const skillColor = post ? getSkillColor(post.skillTag) : "#00D4FF";
 
   useEffect(() => {
@@ -58,31 +68,56 @@ export default function PostDetailScreen() {
   const handleLike = () => {
     if (!userId || !post) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    toggleLike(post.id, userId);
+    toggleLike(post.id);
+  };
+
+  const handleSave = () => {
+    if (!userId || !post) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    toggleSave(post.id);
+  };
+
+  const handleShare = async () => {
+    if (!post) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await Share.share({
+        message: `${post.content}\n\n— @${post.username} on Skillect`,
+      });
+    } catch {}
   };
 
   const handleComment = async () => {
     if (!commentText.trim() || !userId || !post || !currentUserProfile) return;
     setIsSending(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
     await addComment({
       postId: post.id,
       userId,
       username: currentUserProfile.username,
+      displayName: currentUserProfile.displayName,
+      avatarUri: currentUserProfile.avatarUri,
       content: commentText.trim(),
     });
-
     const updated = await getComments(post.id);
     setComments(updated);
     setCommentText("");
     setIsSending(false);
   };
 
+  const TOP = 56 + insets.top + (Platform.OS === "web" ? 67 : 0);
+
   if (!post) {
     return (
       <View style={styles.container}>
-        <Text style={styles.notFound}>Post not found</Text>
+        <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0), height: TOP }]}>
+          <Pressable onPress={() => router.back()} style={styles.backBtn}>
+            <Feather name="arrow-left" size={22} color="#F0F0FA" />
+          </Pressable>
+        </View>
+        <View style={styles.notFoundWrap}>
+          <Text style={styles.notFound}>Post not found</Text>
+        </View>
       </View>
     );
   }
@@ -91,66 +126,75 @@ export default function PostDetailScreen() {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={0}
     >
       <View
         style={[
-          styles.topBar,
+          styles.header,
           {
             paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0),
-            height: 56 + insets.top + (Platform.OS === "web" ? 67 : 0),
+            height: TOP,
           },
         ]}
       >
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Feather name="arrow-left" size={22} color="#F0F0FA" />
         </Pressable>
-        <Text style={styles.topBarTitle}>Post</Text>
-        <View style={{ width: 38 }} />
+        <Text style={styles.headerTitle}>Post</Text>
+        <Pressable onPress={handleShare} style={styles.headerAction}>
+          <Feather name="share" size={20} color="#555578" />
+        </Pressable>
       </View>
 
       <FlatList
         data={comments}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(i) => i.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.listContent,
           {
-            paddingTop:
-              56 + insets.top + (Platform.OS === "web" ? 67 : 0) + 8,
-            paddingBottom: 100,
+            paddingTop: TOP + 8,
+            paddingBottom: 90 + insets.bottom + (Platform.OS === "web" ? 34 : 0),
           },
         ]}
         ListHeaderComponent={
           <View style={styles.postBlock}>
-            <View style={styles.postHeader}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {post.username.charAt(0).toUpperCase()}
+            <Pressable
+              onPress={() => router.push(`/user/${post.userId}`)}
+              style={styles.postHeader}
+            >
+              <Avatar
+                uri={post.avatarUri}
+                name={post.displayName ?? post.username}
+                size={40}
+              />
+              <View style={styles.postUserInfo}>
+                <Text style={styles.postDisplayName}>
+                  {post.displayName ?? post.username}
+                </Text>
+                <Text style={styles.postUsername}>
+                  @{post.username} · {timeAgo(post.createdAt)}
                 </Text>
               </View>
-              <View style={styles.userInfo}>
-                <Text style={styles.username}>@{post.username}</Text>
-                <Text style={styles.timeAgo}>{timeAgo(post.createdAt)}</Text>
-              </View>
-              <View
-                style={[
-                  styles.progressBadge,
-                  { borderColor: skillColor + "66" },
-                ]}
-              >
-                <Text style={[styles.progressText, { color: skillColor }]}>
-                  Day {post.progressDay}
-                </Text>
-              </View>
-            </View>
+              {post.progressDay !== undefined && (
+                <View
+                  style={[
+                    styles.dayBadge,
+                    { borderColor: skillColor + "55" },
+                  ]}
+                >
+                  <Text style={[styles.dayText, { color: skillColor }]}>
+                    Day {post.progressDay}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
 
             <Text style={styles.content}>{post.content}</Text>
 
             {post.imageUri ? (
               <Image
                 source={{ uri: post.imageUri }}
-                style={styles.postImage}
+                style={styles.postImg}
                 resizeMode="cover"
               />
             ) : null}
@@ -159,51 +203,68 @@ export default function PostDetailScreen() {
               style={[
                 styles.skillTag,
                 {
-                  backgroundColor: skillColor + "18",
-                  borderColor: skillColor + "55",
+                  backgroundColor: skillColor + "16",
+                  borderColor: skillColor + "44",
                 },
               ]}
             >
-              <View
-                style={[styles.skillDot, { backgroundColor: skillColor }]}
-              />
+              <View style={[styles.dot, { backgroundColor: skillColor }]} />
               <Text style={[styles.skillName, { color: skillColor }]}>
                 {getSkillName(post.skillTag)}
               </Text>
             </View>
 
-            <View style={styles.likeRow}>
-              <Pressable onPress={handleLike} style={styles.likeBtn}>
+            <View style={styles.actions}>
+              <Pressable onPress={handleLike} style={styles.actionBtn}>
                 <Feather
                   name="heart"
                   size={20}
-                  color={isLiked ? "#FF4444" : "#666688"}
+                  color={isLiked ? "#FF4444" : "#555578"}
                 />
                 <Text
-                  style={[styles.likeCount, isLiked && styles.likedCount]}
+                  style={[
+                    styles.actionCount,
+                    isLiked && { color: "#FF4444" },
+                  ]}
                 >
                   {post.likedBy.length}
                 </Text>
               </Pressable>
+              <Pressable style={styles.actionBtn}>
+                <Feather name="message-circle" size={20} color="#555578" />
+                <Text style={styles.actionCount}>{comments.length}</Text>
+              </Pressable>
+              <Pressable onPress={handleSave} style={styles.actionBtn}>
+                <Feather
+                  name="bookmark"
+                  size={20}
+                  color={isSaved ? "#00D4FF" : "#555578"}
+                />
+              </Pressable>
+              <Pressable onPress={handleShare} style={styles.actionBtn}>
+                <Feather name="share" size={20} color="#555578" />
+              </Pressable>
             </View>
 
             <View style={styles.commentsDivider}>
-              <Text style={styles.commentsTitle}>
-                Comments ({comments.length})
+              <Text style={styles.commentsLabel}>
+                {comments.length} Comment{comments.length !== 1 ? "s" : ""}
               </Text>
             </View>
           </View>
         }
         renderItem={({ item }) => (
           <View style={styles.comment}>
-            <View style={styles.commentAvatar}>
-              <Text style={styles.commentAvatarText}>
-                {item.username.charAt(0).toUpperCase()}
-              </Text>
-            </View>
+            <Avatar
+              uri={item.avatarUri}
+              name={item.displayName ?? item.username}
+              size={30}
+            />
             <View style={styles.commentBody}>
               <View style={styles.commentHeader}>
-                <Text style={styles.commentUsername}>@{item.username}</Text>
+                <Text style={styles.commentName}>
+                  {item.displayName ?? item.username}
+                </Text>
                 <Text style={styles.commentTime}>{timeAgo(item.createdAt)}</Text>
               </View>
               <Text style={styles.commentText}>{item.content}</Text>
@@ -212,14 +273,11 @@ export default function PostDetailScreen() {
         )}
         ListEmptyComponent={
           isLoading ? (
-            <ActivityIndicator
-              color="#00D4FF"
-              style={{ marginTop: 24 }}
-            />
+            <ActivityIndicator color="#00D4FF" style={{ marginTop: 24 }} />
           ) : (
             <View style={styles.noComments}>
               <Text style={styles.noCommentsText}>
-                No comments yet. Be the first.
+                No comments yet. Start the conversation.
               </Text>
             </View>
           )
@@ -238,10 +296,9 @@ export default function PostDetailScreen() {
         <TextInput
           style={styles.commentInput}
           placeholder="Add a comment..."
-          placeholderTextColor="#444460"
+          placeholderTextColor="#333358"
           value={commentText}
           onChangeText={setCommentText}
-          multiline={false}
           returnKeyType="send"
           onSubmitEditing={handleComment}
         />
@@ -251,13 +308,13 @@ export default function PostDetailScreen() {
           style={({ pressed }) => [
             styles.sendBtn,
             (!commentText.trim() || isSending) && styles.sendBtnDisabled,
-            pressed && styles.sendBtnPressed,
+            pressed && { opacity: 0.8 },
           ]}
         >
           {isSending ? (
             <ActivityIndicator color="#0A0A0F" size="small" />
           ) : (
-            <Feather name="send" size={16} color="#0A0A0F" />
+            <Feather name="send" size={15} color="#0A0A0F" />
           )}
         </Pressable>
       </View>
@@ -266,99 +323,67 @@ export default function PostDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0A0A0F",
-  },
-  notFound: {
-    color: "#666688",
-    fontFamily: "Inter_400Regular",
-    fontSize: 14,
-    textAlign: "center",
-    marginTop: 100,
-  },
-  topBar: {
+  container: { flex: 1, backgroundColor: "#0A0A0F" },
+  header: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     zIndex: 10,
-    flexDirection: "row",
-    alignItems: "flex-end",
-    paddingHorizontal: 16,
-    paddingBottom: 12,
     backgroundColor: "#0A0A0F",
     borderBottomWidth: 1,
-    borderBottomColor: "#1E1E32",
+    borderBottomColor: "#141420",
+    flexDirection: "row",
+    alignItems: "flex-end",
+    paddingHorizontal: 8,
+    paddingBottom: 10,
   },
-  backBtn: {
-    padding: 8,
-    marginRight: 8,
-  },
-  topBarTitle: {
+  backBtn: { padding: 8 },
+  headerTitle: {
     flex: 1,
     fontSize: 17,
     fontFamily: "Inter_600SemiBold",
     color: "#F0F0FA",
     textAlign: "center",
   },
-  listContent: {
-    paddingHorizontal: 16,
-  },
-  postBlock: {
-    marginBottom: 8,
-  },
+  headerAction: { padding: 8 },
+  notFoundWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
+  notFound: { fontSize: 14, fontFamily: "Inter_400Regular", color: "#444460" },
+  listContent: { paddingHorizontal: 16 },
+  postBlock: { marginBottom: 8 },
   postHeader: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 10,
     marginBottom: 14,
   },
-  avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "#1E1E32",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10,
-  },
-  avatarText: {
-    fontSize: 16,
-    fontFamily: "Inter_700Bold",
-    color: "#00D4FF",
-  },
-  userInfo: {
-    flex: 1,
-  },
-  username: {
+  postUserInfo: { flex: 1 },
+  postDisplayName: {
     fontSize: 15,
     fontFamily: "Inter_600SemiBold",
     color: "#F0F0FA",
   },
-  timeAgo: {
+  postUsername: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
-    color: "#444460",
+    color: "#555578",
     marginTop: 1,
   },
-  progressBadge: {
+  dayBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1,
   },
-  progressText: {
-    fontSize: 11,
-    fontFamily: "Inter_700Bold",
-  },
+  dayText: { fontSize: 11, fontFamily: "Inter_700Bold" },
   content: {
     fontSize: 16,
     fontFamily: "Inter_400Regular",
-    color: "#D0D0E8",
+    color: "#C8C8E0",
     lineHeight: 24,
     marginBottom: 14,
   },
-  postImage: {
+  postImg: {
     width: "100%",
     height: 220,
     borderRadius: 12,
@@ -368,109 +393,63 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderWidth: 1,
-    gap: 6,
+    gap: 5,
     alignSelf: "flex-start",
     marginBottom: 16,
   },
-  skillDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-  },
-  skillName: {
-    fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
-  },
-  likeRow: {
+  dot: { width: 5, height: 5, borderRadius: 3 },
+  skillName: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  actions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 20,
     borderTopWidth: 1,
-    borderTopColor: "#1E1E32",
+    borderTopColor: "#141420",
     paddingTop: 14,
     marginBottom: 8,
   },
-  likeBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  likeCount: {
-    fontSize: 15,
-    fontFamily: "Inter_500Medium",
-    color: "#666688",
-  },
-  likedCount: {
-    color: "#FF4444",
-  },
+  actionBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
+  actionCount: { fontSize: 15, fontFamily: "Inter_500Medium", color: "#555578" },
   commentsDivider: {
     borderTopWidth: 1,
-    borderTopColor: "#1E1E32",
-    paddingTop: 16,
-    paddingBottom: 8,
+    borderTopColor: "#141420",
+    paddingTop: 14,
+    paddingBottom: 4,
   },
-  commentsTitle: {
-    fontSize: 13,
+  commentsLabel: {
+    fontSize: 12,
     fontFamily: "Inter_600SemiBold",
-    color: "#666688",
+    color: "#444460",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   comment: {
     flexDirection: "row",
     gap: 10,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#1A1A28",
+    borderBottomColor: "#0F0F1C",
   },
-  commentAvatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#1E1E32",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  commentAvatarText: {
-    fontSize: 12,
-    fontFamily: "Inter_700Bold",
-    color: "#00D4FF",
-  },
-  commentBody: {
-    flex: 1,
-  },
+  commentBody: { flex: 1 },
   commentHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginBottom: 3,
+    marginBottom: 4,
   },
-  commentUsername: {
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-    color: "#A0A0C0",
-  },
-  commentTime: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-    color: "#444460",
-  },
+  commentName: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#A0A0C0" },
+  commentTime: { fontSize: 11, fontFamily: "Inter_400Regular", color: "#444460" },
   commentText: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
-    color: "#D0D0E8",
+    color: "#C8C8E0",
     lineHeight: 20,
   },
-  noComments: {
-    paddingVertical: 24,
-    alignItems: "center",
-  },
-  noCommentsText: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    color: "#444460",
-  },
+  noComments: { paddingVertical: 24, alignItems: "center" },
+  noCommentsText: { fontSize: 14, fontFamily: "Inter_400Regular", color: "#444460" },
   inputBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -478,12 +457,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#1E1E32",
+    borderTopColor: "#141420",
     backgroundColor: "#0A0A0F",
   },
   commentInput: {
     flex: 1,
-    backgroundColor: "#12121C",
+    backgroundColor: "#0D0D18",
     borderRadius: 22,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -495,16 +474,11 @@ const styles = StyleSheet.create({
   },
   sendBtn: {
     backgroundColor: "#00D4FF",
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
   },
-  sendBtnDisabled: {
-    opacity: 0.35,
-  },
-  sendBtnPressed: {
-    opacity: 0.8,
-  },
+  sendBtnDisabled: { opacity: 0.35 },
 });

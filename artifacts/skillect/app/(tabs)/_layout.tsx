@@ -13,11 +13,19 @@ function NativeTabLayout() {
     <NativeTabs>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: "house", selected: "house.fill" }} />
-        <Label>Feed</Label>
+        <Label>Home</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="explore">
+        <Icon sf={{ default: "magnifyingglass", selected: "magnifyingglass" }} />
+        <Label>Explore</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="create">
-        <Icon sf={{ default: "plus.circle", selected: "plus.circle.fill" }} />
+        <Icon sf={{ default: "plus.circle.fill", selected: "plus.circle.fill" }} />
         <Label>Post</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="messages">
+        <Icon sf={{ default: "message", selected: "message.fill" }} />
+        <Label>Messages</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
         <Icon sf={{ default: "person", selected: "person.fill" }} />
@@ -28,8 +36,6 @@ function NativeTabLayout() {
 }
 
 function ClassicTabLayout() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark" || true;
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
   const insets = useSafeAreaInsets();
@@ -47,38 +53,51 @@ function ClassicTabLayout() {
           borderTopColor: "#1E1E32",
           elevation: 0,
           paddingBottom: isWeb ? 0 : insets.bottom,
-          ...(isWeb ? { height: 84 } : {}),
+          height: isWeb ? 84 : 56 + insets.bottom,
         },
         tabBarBackground: () =>
           isIOS ? (
             <BlurView
-              intensity={80}
+              intensity={90}
               tint="dark"
               style={StyleSheet.absoluteFill}
-            />
-          ) : isWeb ? (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: "#0A0A0F" },
-              ]}
             />
           ) : null,
         tabBarLabelStyle: {
           fontFamily: "Inter_500Medium",
           fontSize: 10,
+          marginTop: -2,
+        },
+        tabBarItemStyle: {
+          paddingTop: 4,
         },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: "Feed",
-          tabBarIcon: ({ color }) =>
+          title: "Home",
+          tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView name="house" tintColor={color} size={22} />
+              <SymbolView
+                name={focused ? "house.fill" : "house"}
+                tintColor={color}
+                size={22}
+              />
             ) : (
               <Feather name="home" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="explore"
+        options={{
+          title: "Explore",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="magnifyingglass" tintColor={color} size={22} />
+            ) : (
+              <Feather name="search" size={22} color={color} />
             ),
         }}
       />
@@ -86,13 +105,8 @@ function ClassicTabLayout() {
         name="create"
         options={{
           title: "Post",
-          tabBarIcon: ({ color, focused }) => (
-            <View
-              style={[
-                styles.createBtn,
-                focused && styles.createBtnFocused,
-              ]}
-            >
+          tabBarIcon: ({ focused }) => (
+            <View style={[styles.createBtn, focused && styles.createBtnActive]}>
               {isIOS ? (
                 <SymbolView
                   name="plus"
@@ -111,12 +125,32 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="messages"
+        options={{
+          title: "Messages",
+          tabBarIcon: ({ color, focused }) =>
+            isIOS ? (
+              <SymbolView
+                name={focused ? "message.fill" : "message"}
+                tintColor={color}
+                size={22}
+              />
+            ) : (
+              <Feather name="message-circle" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color }) =>
+          tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView name="person" tintColor={color} size={22} />
+              <SymbolView
+                name={focused ? "person.fill" : "person"}
+                tintColor={color}
+                size={22}
+              />
             ) : (
               <Feather name="user" size={22} color={color} />
             ),
@@ -127,25 +161,23 @@ function ClassicTabLayout() {
 }
 
 export default function TabLayout() {
-  if (isLiquidGlassAvailable()) {
-    return <NativeTabLayout />;
-  }
+  if (isLiquidGlassAvailable()) return <NativeTabLayout />;
   return <ClassicTabLayout />;
 }
 
 const styles = StyleSheet.create({
   createBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#12121C",
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#0D0D18",
     borderWidth: 1.5,
     borderColor: "#00D4FF",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  createBtnFocused: {
+  createBtnActive: {
     backgroundColor: "#00D4FF",
     borderColor: "#00D4FF",
   },

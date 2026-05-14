@@ -35,6 +35,12 @@ function RootLayoutNav() {
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="post" />
+      <Stack.Screen name="messages" />
+      <Stack.Screen name="user" />
+      <Stack.Screen
+        name="edit-profile"
+        options={{ presentation: "modal", animation: "slide_from_bottom" }}
+      />
     </Stack>
   );
 }
