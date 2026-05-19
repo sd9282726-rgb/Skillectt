@@ -9,6 +9,7 @@ import {
   Pressable,
   Platform,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -16,6 +17,7 @@ import * as Haptics from "expo-haptics";
 import { useAppContext, UserProfile, Post } from "@/context/AppContext";
 import { getSkillColor, getSkillName, SKILLS } from "@/constants/skills";
 import { Avatar } from "../(tabs)/index";
+import { C } from "@/constants/colors";
 
 export default function UserProfileScreen() {
   const { userId: paramUserId } = useLocalSearchParams<{ userId: string }>();
@@ -75,11 +77,11 @@ export default function UserProfileScreen() {
       <View style={styles.container}>
         <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0), height: TOP }]}>
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <Feather name="arrow-left" size={22} color="#F0F0FA" />
+            <Feather name="arrow-left" size={22} color={C.text} />
           </Pressable>
         </View>
         <View style={[styles.center, { paddingTop: TOP }]}>
-          <ActivityIndicator color="#00D4FF" />
+          <ActivityIndicator color={C.primary} />
         </View>
       </View>
     );
@@ -90,7 +92,7 @@ export default function UserProfileScreen() {
       <View style={styles.container}>
         <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0), height: TOP }]}>
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <Feather name="arrow-left" size={22} color="#F0F0FA" />
+            <Feather name="arrow-left" size={22} color={C.text} />
           </Pressable>
         </View>
         <View style={[styles.center, { paddingTop: TOP }]}>
@@ -105,19 +107,20 @@ export default function UserProfileScreen() {
   const Header = (
     <View style={styles.profileBlock}>
       <View style={styles.topRow}>
-        <Avatar uri={profile.avatarUri} name={profile.displayName} size={72} />
+        <View style={styles.avatarGlow}>
+          <Avatar uri={profile.avatarUri} name={profile.displayName} size={72} />
+        </View>
         {!isMe && (
           <View style={styles.headerBtns}>
             <Pressable
               onPress={handleFollow}
-              style={[styles.followBtn, following && styles.followingBtn]}
+              style={({ pressed }) => [
+                styles.followBtn,
+                following && styles.followingBtn,
+                pressed && { opacity: 0.8 },
+              ]}
             >
-              <Text
-                style={[
-                  styles.followBtnText,
-                  following && styles.followingBtnText,
-                ]}
-              >
+              <Text style={[styles.followBtnText, following && styles.followingBtnText]}>
                 {following ? "Following" : "Follow"}
               </Text>
             </Pressable>
@@ -125,7 +128,7 @@ export default function UserProfileScreen() {
               onPress={() => router.push(`/messages/${paramUserId}`)}
               style={styles.msgBtn}
             >
-              <Feather name="message-circle" size={16} color="#F0F0FA" />
+              <Feather name="message-circle" size={16} color={C.subtext} />
             </Pressable>
           </View>
         )}
@@ -133,15 +136,12 @@ export default function UserProfileScreen() {
 
       <Text style={styles.displayName}>{profile.displayName}</Text>
       <Text style={styles.username}>@{profile.username}</Text>
-
       {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
 
       {profile.currentlyBuilding ? (
         <View style={styles.buildingRow}>
-          <Feather name="tool" size={12} color="#00D4FF" />
-          <Text style={styles.buildingText}>
-            Building: {profile.currentlyBuilding}
-          </Text>
+          <Feather name="tool" size={12} color={C.primary} />
+          <Text style={styles.buildingText}>Building: {profile.currentlyBuilding}</Text>
         </View>
       ) : null}
 
@@ -163,23 +163,17 @@ export default function UserProfileScreen() {
       </View>
 
       {profileSkills.length > 0 && (
-        <View style={styles.skillsWrap}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.skillsWrap}>
           {profileSkills.map((s) => (
             <View
               key={s.id}
-              style={[
-                styles.skillBadge,
-                {
-                  backgroundColor: s.color + "18",
-                  borderColor: s.color + "44",
-                },
-              ]}
+              style={[styles.skillBadge, { backgroundColor: s.color + "14", borderColor: s.color + "40" }]}
             >
               <View style={[styles.dot, { backgroundColor: s.color }]} />
               <Text style={[styles.skillText, { color: s.color }]}>{s.name}</Text>
             </View>
           ))}
-        </View>
+        </ScrollView>
       )}
 
       <Text style={styles.postsHeader}>Posts</Text>
@@ -188,17 +182,9 @@ export default function UserProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0),
-            height: TOP,
-          },
-        ]}
-      >
+      <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0), height: TOP }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Feather name="arrow-left" size={22} color="#F0F0FA" />
+          <Feather name="arrow-left" size={22} color={C.text} />
         </Pressable>
         <Text style={styles.headerTitle}>Profile</Text>
         <View style={{ width: 38 }} />
@@ -211,10 +197,7 @@ export default function UserProfileScreen() {
         columnWrapperStyle={{ gap: 8 }}
         contentContainerStyle={[
           styles.grid,
-          {
-            paddingTop: TOP + 8,
-            paddingBottom: 80 + insets.bottom + (Platform.OS === "web" ? 34 : 0),
-          },
+          { paddingTop: TOP + 8, paddingBottom: 80 + insets.bottom + (Platform.OS === "web" ? 34 : 0) },
         ]}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={Header}
@@ -223,22 +206,21 @@ export default function UserProfileScreen() {
           return (
             <Pressable
               onPress={() => router.push(`/post/${item.id}`)}
-              style={({ pressed }) => [styles.mini, pressed && { opacity: 0.75 }]}
+              style={({ pressed }) => [styles.mini, { borderColor: c + "20" }, pressed && { opacity: 0.75 }]}
             >
               <View style={styles.miniTop}>
-                <View style={[styles.miniDot, { backgroundColor: c }]} />
+                <View style={[styles.miniDot, { backgroundColor: c, shadowColor: c, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 4 }]} />
                 <Text style={[styles.miniDay, { color: c }]}>
                   {item.progressDay ? `Day ${item.progressDay}` : getSkillName(item.skillTag)}
                 </Text>
               </View>
-              <Text style={styles.miniContent} numberOfLines={3}>
-                {item.content}
-              </Text>
+              <Text style={styles.miniContent} numberOfLines={3}>{item.content}</Text>
             </Pressable>
           );
         }}
         ListEmptyComponent={
           <View style={styles.emptyPosts}>
+            <Feather name="edit-3" size={24} color={C.border2} />
             <Text style={styles.emptyText}>No posts yet</Text>
           </View>
         }
@@ -248,7 +230,7 @@ export default function UserProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0A0A0F" },
+  container: { flex: 1, backgroundColor: C.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: {
     position: "absolute",
@@ -256,23 +238,17 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    backgroundColor: "#0A0A0F",
+    backgroundColor: "#040410",
     borderBottomWidth: 1,
-    borderBottomColor: "#141420",
+    borderBottomColor: C.border,
     flexDirection: "row",
     alignItems: "flex-end",
     paddingHorizontal: 16,
     paddingBottom: 12,
   },
   backBtn: { padding: 8 },
-  headerTitle: {
-    flex: 1,
-    fontSize: 17,
-    fontFamily: "Inter_600SemiBold",
-    color: "#F0F0FA",
-    textAlign: "center",
-  },
-  notFound: { fontSize: 14, fontFamily: "Inter_400Regular", color: "#444460" },
+  headerTitle: { flex: 1, fontSize: 17, fontFamily: "Inter_600SemiBold", color: C.text, textAlign: "center" },
+  notFound: { fontSize: 14, fontFamily: "Inter_400Regular", color: C.dim },
   grid: { paddingHorizontal: 16, gap: 8 },
   profileBlock: { paddingBottom: 16 },
   topRow: {
@@ -282,46 +258,41 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     marginTop: 16,
   },
+  avatarGlow: { shadowColor: C.primary, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.25, shadowRadius: 16 },
   headerBtns: { flexDirection: "row", gap: 8, alignItems: "center" },
   followBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 9,
+    paddingHorizontal: 22,
+    paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: "#00D4FF",
+    backgroundColor: C.primary,
+    shadowColor: C.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
   },
-  followingBtn: {
-    backgroundColor: "transparent",
-    borderWidth: 1,
-    borderColor: "#1E1E32",
-  },
-  followBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#0A0A0F" },
-  followingBtnText: { color: "#666688" },
-  msgBtn: {
-    padding: 10,
-    borderRadius: 20,
-    backgroundColor: "#12121C",
-    borderWidth: 1,
-    borderColor: "#1E1E32",
-  },
-  displayName: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#F0F0FA", marginBottom: 2 },
-  username: { fontSize: 13, fontFamily: "Inter_400Regular", color: "#555578", marginBottom: 10 },
-  bio: { fontSize: 14, fontFamily: "Inter_400Regular", color: "#A0A0C0", lineHeight: 20, marginBottom: 12 },
+  followingBtn: { backgroundColor: "transparent", borderWidth: 1, borderColor: C.border2, shadowColor: "transparent" },
+  followBtnText: { fontSize: 13, fontFamily: "Inter_700Bold", color: C.bg },
+  followingBtnText: { color: C.dim },
+  msgBtn: { padding: 10, borderRadius: 20, backgroundColor: C.cardAlt, borderWidth: 1, borderColor: C.border2 },
+  displayName: { fontSize: 20, fontFamily: "Inter_700Bold", color: C.text, marginBottom: 2 },
+  username: { fontSize: 13, fontFamily: "Inter_400Regular", color: C.dim, marginBottom: 10 },
+  bio: { fontSize: 14, fontFamily: "Inter_400Regular", color: C.subtext, lineHeight: 20, marginBottom: 12 },
   buildingRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 14 },
-  buildingText: { fontSize: 13, fontFamily: "Inter_500Medium", color: "#00D4FF" },
+  buildingText: { fontSize: 13, fontFamily: "Inter_500Medium", color: C.primary },
   statsRow: {
     flexDirection: "row",
-    backgroundColor: "#0D0D18",
+    backgroundColor: C.card,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#141420",
+    borderColor: C.border,
     marginBottom: 14,
   },
   stat: { flex: 1, alignItems: "center" },
-  statVal: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#F0F0FA" },
-  statLabel: { fontSize: 11, fontFamily: "Inter_400Regular", color: "#555578", marginTop: 2 },
-  statDiv: { width: 1, backgroundColor: "#1E1E32" },
-  skillsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 16 },
+  statVal: { fontSize: 20, fontFamily: "Inter_700Bold", color: C.text },
+  statLabel: { fontSize: 11, fontFamily: "Inter_400Regular", color: C.dim, marginTop: 2 },
+  statDiv: { width: 1, backgroundColor: C.border },
+  skillsWrap: { flexDirection: "row", gap: 6, marginBottom: 16 },
   skillBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -334,34 +305,28 @@ const styles = StyleSheet.create({
   dot: { width: 5, height: 5, borderRadius: 3 },
   skillText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   postsHeader: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: "Inter_600SemiBold",
-    color: "#444460",
+    color: C.dim,
     textTransform: "uppercase",
     letterSpacing: 0.8,
     marginBottom: 8,
     borderTopWidth: 1,
-    borderTopColor: "#141420",
+    borderTopColor: C.border,
     paddingTop: 14,
   },
   mini: {
     flex: 1,
-    backgroundColor: "#0D0D18",
+    backgroundColor: C.card,
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: "#141420",
     minHeight: 100,
   },
   miniTop: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 6 },
   miniDot: { width: 5, height: 5, borderRadius: 3 },
   miniDay: { fontSize: 10, fontFamily: "Inter_700Bold" },
-  miniContent: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-    color: "#888899",
-    lineHeight: 16,
-  },
-  emptyPosts: { paddingTop: 32, alignItems: "center" },
-  emptyText: { fontSize: 14, fontFamily: "Inter_400Regular", color: "#333358" },
+  miniContent: { fontSize: 11, fontFamily: "Inter_400Regular", color: C.subtext, lineHeight: 16 },
+  emptyPosts: { paddingTop: 32, alignItems: "center", gap: 8 },
+  emptyText: { fontSize: 14, fontFamily: "Inter_400Regular", color: C.dim },
 });

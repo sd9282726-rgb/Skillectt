@@ -11,13 +11,13 @@ import {
   Platform,
   KeyboardAvoidingView,
   ActivityIndicator,
-  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useAppContext, Message, UserProfile } from "@/context/AppContext";
 import { Avatar } from "../(tabs)/index";
+import { C } from "@/constants/colors";
 
 function timeStr(iso: string): string {
   const d = new Date(iso);
@@ -38,9 +38,7 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
-  const convId = userId && paramUserId
-    ? [userId, paramUserId].sort().join("_")
-    : "";
+  const convId = userId && paramUserId ? [userId, paramUserId].sort().join("_") : "";
 
   useEffect(() => {
     if (!paramUserId) return;
@@ -81,25 +79,13 @@ export default function ChatScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={0}
     >
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0),
-            height: TOP,
-          },
-        ]}
-      >
+      <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0), height: TOP }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Feather name="arrow-left" size={22} color="#F0F0FA" />
+          <Feather name="arrow-left" size={22} color={C.text} />
         </Pressable>
         {otherProfile && (
           <View style={styles.headerUser}>
-            <Avatar
-              uri={otherProfile.avatarUri}
-              name={otherProfile.displayName}
-              size={32}
-            />
+            <Avatar uri={otherProfile.avatarUri} name={otherProfile.displayName} size={32} />
             <View>
               <Text style={styles.headerName}>{otherProfile.displayName}</Text>
               <View style={styles.onlineRow}>
@@ -114,7 +100,7 @@ export default function ChatScreen() {
 
       {loading ? (
         <View style={[styles.center, { paddingTop: TOP }]}>
-          <ActivityIndicator color="#00D4FF" />
+          <ActivityIndicator color={C.primary} />
         </View>
       ) : (
         <FlatList
@@ -124,52 +110,23 @@ export default function ChatScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
             styles.msgList,
-            {
-              paddingTop: TOP + 8,
-              paddingBottom: 80 + insets.bottom + (Platform.OS === "web" ? 34 : 0),
-            },
+            { paddingTop: TOP + 8, paddingBottom: 80 + insets.bottom + (Platform.OS === "web" ? 34 : 0) },
           ]}
-          onContentSizeChange={() =>
-            flatRef.current?.scrollToEnd({ animated: false })
-          }
+          onContentSizeChange={() => flatRef.current?.scrollToEnd({ animated: false })}
           renderItem={({ item }) => {
             const isMe = item.senderId === userId;
             return (
-              <View
-                style={[
-                  styles.bubbleRow,
-                  isMe ? styles.bubbleRight : styles.bubbleLeft,
-                ]}
-              >
+              <View style={[styles.bubbleRow, isMe ? styles.bubbleRight : styles.bubbleLeft]}>
                 {!isMe && otherProfile && (
-                  <Avatar
-                    uri={otherProfile.avatarUri}
-                    name={otherProfile.displayName}
-                    size={28}
-                  />
+                  <Avatar uri={otherProfile.avatarUri} name={otherProfile.displayName} size={28} />
                 )}
                 <View>
-                  <View
-                    style={[
-                      styles.bubble,
-                      isMe ? styles.bubbleMe : styles.bubbleThem,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.bubbleText,
-                        isMe ? styles.bubbleTextMe : styles.bubbleTextThem,
-                      ]}
-                    >
+                  <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
+                    <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextThem]}>
                       {item.content}
                     </Text>
                   </View>
-                  <Text
-                    style={[
-                      styles.bubbleTime,
-                      isMe ? { textAlign: "right" } : null,
-                    ]}
-                  >
+                  <Text style={[styles.bubbleTime, isMe ? { textAlign: "right" } : null]}>
                     {timeStr(item.createdAt)}
                   </Text>
                 </View>
@@ -178,34 +135,21 @@ export default function ChatScreen() {
           }}
           ListEmptyComponent={
             <View style={styles.emptyChat}>
-              <Avatar
-                uri={otherProfile?.avatarUri}
-                name={otherProfile?.displayName ?? "?"}
-                size={64}
-              />
-              <Text style={styles.emptyChatName}>
-                {otherProfile?.displayName}
-              </Text>
-              <Text style={styles.emptyChatSub}>
-                @{otherProfile?.username} · Start the conversation
-              </Text>
+              <View style={styles.emptyChatAvatar}>
+                <Avatar uri={otherProfile?.avatarUri} name={otherProfile?.displayName ?? "?"} size={64} />
+              </View>
+              <Text style={styles.emptyChatName}>{otherProfile?.displayName}</Text>
+              <Text style={styles.emptyChatSub}>@{otherProfile?.username} · Start the conversation</Text>
             </View>
           }
         />
       )}
 
-      <View
-        style={[
-          styles.inputBar,
-          {
-            paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 8,
-          },
-        ]}
-      >
+      <View style={[styles.inputBar, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 8 }]}>
         <TextInput
           style={styles.msgInput}
           placeholder="Message..."
-          placeholderTextColor="#333358"
+          placeholderTextColor={C.muted}
           value={text}
           onChangeText={setText}
           multiline={false}
@@ -218,13 +162,13 @@ export default function ChatScreen() {
           style={({ pressed }) => [
             styles.sendBtn,
             (!text.trim() || sending) && styles.sendBtnDisabled,
-            pressed && styles.sendBtnPressed,
+            pressed && { opacity: 0.8 },
           ]}
         >
           {sending ? (
-            <ActivityIndicator color="#0A0A0F" size="small" />
+            <ActivityIndicator color={C.bg} size="small" />
           ) : (
-            <Feather name="send" size={16} color="#0A0A0F" />
+            <Feather name="send" size={16} color={C.bg} />
           )}
         </Pressable>
       </View>
@@ -233,7 +177,7 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0A0A0F" },
+  container: { flex: 1, backgroundColor: C.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: {
     position: "absolute",
@@ -241,72 +185,62 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    backgroundColor: "#0A0A0F",
+    backgroundColor: "#040410",
     borderBottomWidth: 1,
-    borderBottomColor: "#141420",
+    borderBottomColor: C.border,
     flexDirection: "row",
     alignItems: "flex-end",
     paddingHorizontal: 12,
     paddingBottom: 10,
   },
   backBtn: { padding: 8 },
-  headerUser: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    justifyContent: "center",
-  },
-  headerName: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#F0F0FA" },
+  headerUser: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, justifyContent: "center" },
+  headerName: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: C.text },
   onlineRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   onlineDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#22C55E",
+    backgroundColor: C.primary,
+    shadowColor: C.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
   },
-  onlineText: { fontSize: 11, fontFamily: "Inter_400Regular", color: "#22C55E" },
+  onlineText: { fontSize: 11, fontFamily: "Inter_400Regular", color: C.primary },
   msgList: { paddingHorizontal: 16, gap: 4 },
   bubbleRow: { flexDirection: "row", gap: 8, marginBottom: 4 },
   bubbleLeft: { justifyContent: "flex-start" },
   bubbleRight: { justifyContent: "flex-end" },
-  bubble: {
-    maxWidth: 240,
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
+  bubble: { maxWidth: 260, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
   bubbleMe: {
-    backgroundColor: "#00D4FF",
+    backgroundColor: C.primary,
     borderBottomRightRadius: 4,
+    shadowColor: C.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   bubbleThem: {
-    backgroundColor: "#12121C",
+    backgroundColor: C.card,
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: "#1E1E32",
+    borderColor: C.border2,
   },
   bubbleText: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
-  bubbleTextMe: { color: "#0A0A0F" },
-  bubbleTextThem: { color: "#F0F0FA" },
-  bubbleTime: {
-    fontSize: 10,
-    fontFamily: "Inter_400Regular",
-    color: "#444460",
-    marginTop: 3,
-    marginHorizontal: 4,
+  bubbleTextMe: { color: C.bg },
+  bubbleTextThem: { color: C.text },
+  bubbleTime: { fontSize: 10, fontFamily: "Inter_400Regular", color: C.dim, marginTop: 3, marginHorizontal: 4 },
+  emptyChat: { alignItems: "center", paddingTop: 60, gap: 10 },
+  emptyChatAvatar: {
+    shadowColor: C.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    marginBottom: 4,
   },
-  emptyChat: {
-    alignItems: "center",
-    paddingTop: 60,
-    gap: 10,
-  },
-  emptyChatName: { fontSize: 18, fontFamily: "Inter_700Bold", color: "#F0F0FA" },
-  emptyChatSub: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    color: "#444460",
-  },
+  emptyChatName: { fontSize: 18, fontFamily: "Inter_700Bold", color: C.text },
+  emptyChatSub: { fontSize: 13, fontFamily: "Inter_400Regular", color: C.dim },
   inputBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -314,29 +248,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#141420",
-    backgroundColor: "#0A0A0F",
+    borderTopColor: C.border,
+    backgroundColor: "#040410",
   },
   msgInput: {
     flex: 1,
-    backgroundColor: "#0D0D18",
+    backgroundColor: C.card,
     borderRadius: 22,
     paddingHorizontal: 16,
     paddingVertical: 10,
     fontSize: 14,
     fontFamily: "Inter_400Regular",
-    color: "#F0F0FA",
+    color: C.text,
     borderWidth: 1,
-    borderColor: "#1E1E32",
+    borderColor: C.border2,
   },
   sendBtn: {
-    backgroundColor: "#00D4FF",
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    backgroundColor: C.primary,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: C.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
   },
-  sendBtnDisabled: { opacity: 0.35 },
-  sendBtnPressed: { opacity: 0.8 },
+  sendBtnDisabled: { opacity: 0.35, shadowColor: "transparent" },
 });

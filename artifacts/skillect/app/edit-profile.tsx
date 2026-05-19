@@ -18,6 +18,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { useAppContext } from "@/context/AppContext";
+import { C } from "@/constants/colors";
 
 export default function EditProfileScreen() {
   const { userId } = useAuth();
@@ -25,16 +26,10 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [displayName, setDisplayName] = useState(
-    currentUserProfile?.displayName ?? ""
-  );
+  const [displayName, setDisplayName] = useState(currentUserProfile?.displayName ?? "");
   const [bio, setBio] = useState(currentUserProfile?.bio ?? "");
-  const [currentlyBuilding, setCurrentlyBuilding] = useState(
-    currentUserProfile?.currentlyBuilding ?? ""
-  );
-  const [avatarUri, setAvatarUri] = useState<string | undefined>(
-    currentUserProfile?.avatarUri
-  );
+  const [currentlyBuilding, setCurrentlyBuilding] = useState(currentUserProfile?.currentlyBuilding ?? "");
+  const [avatarUri, setAvatarUri] = useState<string | undefined>(currentUserProfile?.avatarUri);
   const [isSaving, setIsSaving] = useState(false);
 
   const pickAvatar = async () => {
@@ -44,9 +39,7 @@ export default function EditProfileScreen() {
       aspect: [1, 1],
       quality: 0.8,
     });
-    if (!result.canceled && result.assets[0]) {
-      setAvatarUri(result.assets[0].uri);
-    }
+    if (!result.canceled && result.assets[0]) setAvatarUri(result.assets[0].uri);
   };
 
   const handleSave = async () => {
@@ -72,26 +65,14 @@ export default function EditProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: TOP,
-            height: 56 + TOP,
-          },
-        ]}
-      >
+      <View style={[styles.header, { paddingTop: TOP, height: 56 + TOP }]}>
         <Pressable onPress={() => router.back()} style={styles.headerBtn}>
           <Text style={styles.cancelText}>Cancel</Text>
         </Pressable>
         <Text style={styles.headerTitle}>Edit Profile</Text>
-        <Pressable
-          onPress={handleSave}
-          disabled={isSaving}
-          style={styles.headerBtn}
-        >
+        <Pressable onPress={handleSave} disabled={isSaving} style={styles.headerBtn}>
           {isSaving ? (
-            <ActivityIndicator color="#00D4FF" size="small" />
+            <ActivityIndicator color={C.primary} size="small" />
           ) : (
             <Text style={styles.saveText}>Save</Text>
           )}
@@ -101,10 +82,7 @@ export default function EditProfileScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
-          {
-            paddingTop: 56 + TOP + 24,
-            paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 40,
-          },
+          { paddingTop: 56 + TOP + 24, paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 40 },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -122,7 +100,7 @@ export default function EditProfileScreen() {
             </View>
           )}
           <View style={styles.avatarOverlay}>
-            <Feather name="camera" size={18} color="#F0F0FA" />
+            <Feather name="camera" size={16} color={C.bg} />
           </View>
           <Text style={styles.changePhotoText}>Change photo</Text>
         </Pressable>
@@ -132,7 +110,7 @@ export default function EditProfileScreen() {
           <TextInput
             style={styles.input}
             placeholder="Your name"
-            placeholderTextColor="#333358"
+            placeholderTextColor={C.muted}
             value={displayName}
             onChangeText={setDisplayName}
             maxLength={40}
@@ -142,21 +120,17 @@ export default function EditProfileScreen() {
         <View style={styles.field}>
           <Text style={styles.fieldLabel}>Username</Text>
           <View style={styles.inputReadonly}>
-            <Text style={styles.inputReadonlyText}>
-              @{currentUserProfile?.username}
-            </Text>
+            <Text style={styles.inputReadonlyText}>@{currentUserProfile?.username}</Text>
           </View>
           <Text style={styles.hint}>Username cannot be changed</Text>
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>
-            Bio <Text style={styles.opt}>(optional)</Text>
-          </Text>
+          <Text style={styles.fieldLabel}>Bio <Text style={styles.opt}>(optional)</Text></Text>
           <TextInput
             style={[styles.input, styles.textArea]}
             placeholder="Tell the community about yourself..."
-            placeholderTextColor="#333358"
+            placeholderTextColor={C.muted}
             value={bio}
             onChangeText={setBio}
             multiline
@@ -168,13 +142,11 @@ export default function EditProfileScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>
-            Currently Building <Text style={styles.opt}>(optional)</Text>
-          </Text>
+          <Text style={styles.fieldLabel}>Currently Building <Text style={styles.opt}>(optional)</Text></Text>
           <TextInput
             style={styles.input}
             placeholder="e.g. A productivity app for students"
-            placeholderTextColor="#333358"
+            placeholderTextColor={C.muted}
             value={currentlyBuilding}
             onChangeText={setCurrentlyBuilding}
             maxLength={80}
@@ -182,16 +154,12 @@ export default function EditProfileScreen() {
         </View>
 
         <Pressable
-          style={({ pressed }) => [
-            styles.saveBtn,
-            pressed && styles.saveBtnPressed,
-            isSaving && styles.saveBtnDisabled,
-          ]}
+          style={({ pressed }) => [styles.saveBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }, isSaving && styles.saveBtnDisabled]}
           onPress={handleSave}
           disabled={isSaving}
         >
           {isSaving ? (
-            <ActivityIndicator color="#0A0A0F" size="small" />
+            <ActivityIndicator color={C.bg} size="small" />
           ) : (
             <Text style={styles.saveBtnText}>Save Changes</Text>
           )}
@@ -202,16 +170,16 @@ export default function EditProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0A0A0F" },
+  container: { flex: 1, backgroundColor: C.bg },
   header: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     zIndex: 10,
-    backgroundColor: "#0A0A0F",
+    backgroundColor: "#040410",
     borderBottomWidth: 1,
-    borderBottomColor: "#141420",
+    borderBottomColor: C.border,
     flexDirection: "row",
     alignItems: "flex-end",
     paddingHorizontal: 16,
@@ -219,9 +187,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   headerBtn: { minWidth: 60 },
-  cancelText: { fontSize: 15, fontFamily: "Inter_400Regular", color: "#666688" },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", color: "#F0F0FA" },
-  saveText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#00D4FF", textAlign: "right" },
+  cancelText: { fontSize: 15, fontFamily: "Inter_400Regular", color: C.dim },
+  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", color: C.text },
+  saveText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: C.primary, textAlign: "right" },
   scroll: { paddingHorizontal: 24 },
   avatarSection: { alignItems: "center", marginBottom: 32 },
   avatar: { width: 88, height: 88, borderRadius: 44 },
@@ -229,78 +197,74 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: "#12121C",
+    backgroundColor: C.primaryDim,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
-    borderColor: "#1E1E32",
+    borderColor: C.primaryBorder,
+    shadowColor: C.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
   },
-  avatarInitial: { fontSize: 32, fontFamily: "Inter_700Bold", color: "#00D4FF" },
+  avatarInitial: { fontSize: 32, fontFamily: "Inter_700Bold", color: C.primary },
   avatarOverlay: {
     position: "absolute",
     bottom: 28,
     right: "35%",
-    backgroundColor: "#00D4FF",
+    backgroundColor: C.primary,
     borderRadius: 14,
-    padding: 5,
+    padding: 6,
+    shadowColor: C.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
   },
-  changePhotoText: {
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
-    color: "#00D4FF",
-    marginTop: 8,
-  },
+  changePhotoText: { fontSize: 13, fontFamily: "Inter_500Medium", color: C.primary, marginTop: 8 },
   field: { marginBottom: 20 },
   fieldLabel: {
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
-    color: "#A0A0C0",
+    color: C.subtext,
     textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: 8,
   },
-  opt: { fontSize: 10, fontFamily: "Inter_400Regular", color: "#555578", textTransform: "none" },
+  opt: { fontSize: 10, fontFamily: "Inter_400Regular", color: C.dim, textTransform: "none" },
   input: {
-    backgroundColor: "#0D0D18",
+    backgroundColor: C.card,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 13,
     fontSize: 15,
     fontFamily: "Inter_400Regular",
-    color: "#F0F0FA",
+    color: C.text,
     borderWidth: 1,
-    borderColor: "#1E1E32",
+    borderColor: C.border2,
   },
   textArea: { height: 100, textAlignVertical: "top", paddingTop: 13 },
   inputReadonly: {
-    backgroundColor: "#08080F",
+    backgroundColor: "#06060E",
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 13,
     borderWidth: 1,
-    borderColor: "#1A1A28",
+    borderColor: C.border,
   },
-  inputReadonlyText: {
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-    color: "#555578",
-  },
-  hint: { fontSize: 11, fontFamily: "Inter_400Regular", color: "#333358", marginTop: 4 },
-  charCount: {
-    fontSize: 10,
-    fontFamily: "Inter_400Regular",
-    color: "#333358",
-    textAlign: "right",
-    marginTop: 3,
-  },
+  inputReadonlyText: { fontSize: 15, fontFamily: "Inter_400Regular", color: C.dim },
+  hint: { fontSize: 11, fontFamily: "Inter_400Regular", color: C.muted, marginTop: 4 },
+  charCount: { fontSize: 10, fontFamily: "Inter_400Regular", color: C.dim, textAlign: "right", marginTop: 3 },
   saveBtn: {
-    backgroundColor: "#00D4FF",
+    backgroundColor: C.primary,
     borderRadius: 14,
     paddingVertical: 15,
     alignItems: "center",
     marginTop: 8,
+    shadowColor: C.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 14,
   },
-  saveBtnPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
-  saveBtnDisabled: { opacity: 0.4 },
-  saveBtnText: { fontSize: 16, fontFamily: "Inter_700Bold", color: "#0A0A0F" },
+  saveBtnDisabled: { opacity: 0.4, shadowColor: "transparent" },
+  saveBtnText: { fontSize: 16, fontFamily: "Inter_700Bold", color: C.bg },
 });

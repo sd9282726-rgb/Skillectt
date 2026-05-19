@@ -20,6 +20,7 @@ import * as Haptics from "expo-haptics";
 import { useAppContext, Comment } from "@/context/AppContext";
 import { getSkillColor, getSkillName } from "@/constants/skills";
 import { Avatar } from "../(tabs)/index";
+import { C } from "@/constants/colors";
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -54,7 +55,7 @@ export default function PostDetailScreen() {
 
   const isLiked = userId ? post?.likedBy.includes(userId) ?? false : false;
   const isSaved = savedPostIds.includes(id ?? "");
-  const skillColor = post ? getSkillColor(post.skillTag) : "#00D4FF";
+  const skillColor = post ? getSkillColor(post.skillTag) : C.primary;
 
   useEffect(() => {
     if (id) {
@@ -81,9 +82,7 @@ export default function PostDetailScreen() {
     if (!post) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      await Share.share({
-        message: `${post.content}\n\n— @${post.username} on Skillect`,
-      });
+      await Share.share({ message: `${post.content}\n\n— @${post.username} on Skillect` });
     } catch {}
   };
 
@@ -112,7 +111,7 @@ export default function PostDetailScreen() {
       <View style={styles.container}>
         <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0), height: TOP }]}>
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <Feather name="arrow-left" size={22} color="#F0F0FA" />
+            <Feather name="arrow-left" size={22} color={C.text} />
           </Pressable>
         </View>
         <View style={styles.notFoundWrap}>
@@ -123,25 +122,14 @@ export default function PostDetailScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0),
-            height: TOP,
-          },
-        ]}
-      >
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0), height: TOP }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Feather name="arrow-left" size={22} color="#F0F0FA" />
+          <Feather name="arrow-left" size={22} color={C.text} />
         </Pressable>
         <Text style={styles.headerTitle}>Post</Text>
         <Pressable onPress={handleShare} style={styles.headerAction}>
-          <Feather name="share" size={20} color="#555578" />
+          <Feather name="share" size={20} color={C.dim} />
         </Pressable>
       </View>
 
@@ -151,10 +139,7 @@ export default function PostDetailScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.listContent,
-          {
-            paddingTop: TOP + 8,
-            paddingBottom: 90 + insets.bottom + (Platform.OS === "web" ? 34 : 0),
-          },
+          { paddingTop: TOP + 8, paddingBottom: 90 + insets.bottom + (Platform.OS === "web" ? 34 : 0) },
         ]}
         ListHeaderComponent={
           <View style={styles.postBlock}>
@@ -162,29 +147,14 @@ export default function PostDetailScreen() {
               onPress={() => router.push(`/user/${post.userId}`)}
               style={styles.postHeader}
             >
-              <Avatar
-                uri={post.avatarUri}
-                name={post.displayName ?? post.username}
-                size={40}
-              />
+              <Avatar uri={post.avatarUri} name={post.displayName ?? post.username} size={42} />
               <View style={styles.postUserInfo}>
-                <Text style={styles.postDisplayName}>
-                  {post.displayName ?? post.username}
-                </Text>
-                <Text style={styles.postUsername}>
-                  @{post.username} · {timeAgo(post.createdAt)}
-                </Text>
+                <Text style={styles.postDisplayName}>{post.displayName ?? post.username}</Text>
+                <Text style={styles.postUsername}>@{post.username} · {timeAgo(post.createdAt)}</Text>
               </View>
               {post.progressDay !== undefined && (
-                <View
-                  style={[
-                    styles.dayBadge,
-                    { borderColor: skillColor + "55" },
-                  ]}
-                >
-                  <Text style={[styles.dayText, { color: skillColor }]}>
-                    Day {post.progressDay}
-                  </Text>
+                <View style={[styles.dayBadge, { borderColor: skillColor + "50", backgroundColor: skillColor + "12" }]}>
+                  <Text style={[styles.dayText, { color: skillColor }]}>Day {post.progressDay}</Text>
                 </View>
               )}
             </Pressable>
@@ -192,57 +162,30 @@ export default function PostDetailScreen() {
             <Text style={styles.content}>{post.content}</Text>
 
             {post.imageUri ? (
-              <Image
-                source={{ uri: post.imageUri }}
-                style={styles.postImg}
-                resizeMode="cover"
-              />
+              <Image source={{ uri: post.imageUri }} style={styles.postImg} resizeMode="cover" />
             ) : null}
 
-            <View
-              style={[
-                styles.skillTag,
-                {
-                  backgroundColor: skillColor + "16",
-                  borderColor: skillColor + "44",
-                },
-              ]}
-            >
-              <View style={[styles.dot, { backgroundColor: skillColor }]} />
-              <Text style={[styles.skillName, { color: skillColor }]}>
-                {getSkillName(post.skillTag)}
-              </Text>
+            <View style={[styles.skillTag, { backgroundColor: skillColor + "14", borderColor: skillColor + "40" }]}>
+              <View style={[styles.dot, { backgroundColor: skillColor, shadowColor: skillColor, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 4 }]} />
+              <Text style={[styles.skillName, { color: skillColor }]}>{getSkillName(post.skillTag)}</Text>
             </View>
 
             <View style={styles.actions}>
               <Pressable onPress={handleLike} style={styles.actionBtn}>
-                <Feather
-                  name="heart"
-                  size={20}
-                  color={isLiked ? "#FF4444" : "#555578"}
-                />
-                <Text
-                  style={[
-                    styles.actionCount,
-                    isLiked && { color: "#FF4444" },
-                  ]}
-                >
+                <Feather name="heart" size={20} color={isLiked ? "#FF4466" : C.dim} />
+                <Text style={[styles.actionCount, isLiked && { color: "#FF4466" }]}>
                   {post.likedBy.length}
                 </Text>
               </Pressable>
               <Pressable style={styles.actionBtn}>
-                <Feather name="message-circle" size={20} color="#555578" />
+                <Feather name="message-circle" size={20} color={C.dim} />
                 <Text style={styles.actionCount}>{comments.length}</Text>
               </Pressable>
               <Pressable onPress={handleSave} style={styles.actionBtn}>
-                <Feather
-                  name="bookmark"
-                  size={20}
-                  color={isSaved ? "#00D4FF" : "#555578"}
-                />
+                <Feather name="bookmark" size={20} color={isSaved ? C.primary : C.dim} />
               </Pressable>
               <Pressable onPress={handleShare} style={styles.actionBtn}>
-                <Feather name="share" size={20} color="#555578" />
+                <Feather name="share" size={20} color={C.dim} />
               </Pressable>
             </View>
 
@@ -255,16 +198,10 @@ export default function PostDetailScreen() {
         }
         renderItem={({ item }) => (
           <View style={styles.comment}>
-            <Avatar
-              uri={item.avatarUri}
-              name={item.displayName ?? item.username}
-              size={30}
-            />
+            <Avatar uri={item.avatarUri} name={item.displayName ?? item.username} size={30} />
             <View style={styles.commentBody}>
               <View style={styles.commentHeader}>
-                <Text style={styles.commentName}>
-                  {item.displayName ?? item.username}
-                </Text>
+                <Text style={styles.commentName}>{item.displayName ?? item.username}</Text>
                 <Text style={styles.commentTime}>{timeAgo(item.createdAt)}</Text>
               </View>
               <Text style={styles.commentText}>{item.content}</Text>
@@ -273,30 +210,21 @@ export default function PostDetailScreen() {
         )}
         ListEmptyComponent={
           isLoading ? (
-            <ActivityIndicator color="#00D4FF" style={{ marginTop: 24 }} />
+            <ActivityIndicator color={C.primary} style={{ marginTop: 24 }} />
           ) : (
             <View style={styles.noComments}>
-              <Text style={styles.noCommentsText}>
-                No comments yet. Start the conversation.
-              </Text>
+              <Feather name="message-circle" size={22} color={C.border2} />
+              <Text style={styles.noCommentsText}>No comments yet. Start the conversation.</Text>
             </View>
           )
         }
       />
 
-      <View
-        style={[
-          styles.inputBar,
-          {
-            paddingBottom:
-              insets.bottom + (Platform.OS === "web" ? 34 : 0) + 8,
-          },
-        ]}
-      >
+      <View style={[styles.inputBar, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 8 }]}>
         <TextInput
           style={styles.commentInput}
           placeholder="Add a comment..."
-          placeholderTextColor="#333358"
+          placeholderTextColor={C.muted}
           value={commentText}
           onChangeText={setCommentText}
           returnKeyType="send"
@@ -312,9 +240,9 @@ export default function PostDetailScreen() {
           ]}
         >
           {isSending ? (
-            <ActivityIndicator color="#0A0A0F" size="small" />
+            <ActivityIndicator color={C.bg} size="small" />
           ) : (
-            <Feather name="send" size={15} color="#0A0A0F" />
+            <Feather name="send" size={15} color={C.bg} />
           )}
         </Pressable>
       </View>
@@ -323,72 +251,42 @@ export default function PostDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0A0A0F" },
+  container: { flex: 1, backgroundColor: C.bg },
   header: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     zIndex: 10,
-    backgroundColor: "#0A0A0F",
+    backgroundColor: "#040410",
     borderBottomWidth: 1,
-    borderBottomColor: "#141420",
+    borderBottomColor: C.border,
     flexDirection: "row",
     alignItems: "flex-end",
     paddingHorizontal: 8,
     paddingBottom: 10,
   },
   backBtn: { padding: 8 },
-  headerTitle: {
-    flex: 1,
-    fontSize: 17,
-    fontFamily: "Inter_600SemiBold",
-    color: "#F0F0FA",
-    textAlign: "center",
-  },
+  headerTitle: { flex: 1, fontSize: 17, fontFamily: "Inter_600SemiBold", color: C.text, textAlign: "center" },
   headerAction: { padding: 8 },
   notFoundWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
-  notFound: { fontSize: 14, fontFamily: "Inter_400Regular", color: "#444460" },
+  notFound: { fontSize: 14, fontFamily: "Inter_400Regular", color: C.dim },
   listContent: { paddingHorizontal: 16 },
   postBlock: { marginBottom: 8 },
-  postHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 14,
-  },
+  postHeader: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 },
   postUserInfo: { flex: 1 },
-  postDisplayName: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-    color: "#F0F0FA",
-  },
-  postUsername: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-    color: "#555578",
-    marginTop: 1,
-  },
-  dayBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
+  postDisplayName: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: C.text },
+  postUsername: { fontSize: 12, fontFamily: "Inter_400Regular", color: C.dim, marginTop: 1 },
+  dayBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1 },
   dayText: { fontSize: 11, fontFamily: "Inter_700Bold" },
   content: {
     fontSize: 16,
     fontFamily: "Inter_400Regular",
-    color: "#C8C8E0",
-    lineHeight: 24,
+    color: "#D0D8F0",
+    lineHeight: 25,
     marginBottom: 14,
   },
-  postImg: {
-    width: "100%",
-    height: 220,
-    borderRadius: 12,
-    marginBottom: 14,
-  },
+  postImg: { width: "100%", height: 220, borderRadius: 12, marginBottom: 14 },
   skillTag: {
     flexDirection: "row",
     alignItems: "center",
@@ -405,24 +303,19 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 20,
+    gap: 22,
     borderTopWidth: 1,
-    borderTopColor: "#141420",
+    borderTopColor: C.border,
     paddingTop: 14,
     marginBottom: 8,
   },
-  actionBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
-  actionCount: { fontSize: 15, fontFamily: "Inter_500Medium", color: "#555578" },
-  commentsDivider: {
-    borderTopWidth: 1,
-    borderTopColor: "#141420",
-    paddingTop: 14,
-    paddingBottom: 4,
-  },
+  actionBtn: { flexDirection: "row", alignItems: "center", gap: 7 },
+  actionCount: { fontSize: 15, fontFamily: "Inter_500Medium", color: C.dim },
+  commentsDivider: { borderTopWidth: 1, borderTopColor: C.border, paddingTop: 14, paddingBottom: 4 },
   commentsLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: "Inter_600SemiBold",
-    color: "#444460",
+    color: C.dim,
     textTransform: "uppercase",
     letterSpacing: 0.8,
   },
@@ -431,25 +324,15 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#0F0F1C",
+    borderBottomColor: C.border,
   },
   commentBody: { flex: 1 },
-  commentHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 4,
-  },
-  commentName: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#A0A0C0" },
-  commentTime: { fontSize: 11, fontFamily: "Inter_400Regular", color: "#444460" },
-  commentText: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    color: "#C8C8E0",
-    lineHeight: 20,
-  },
-  noComments: { paddingVertical: 24, alignItems: "center" },
-  noCommentsText: { fontSize: 14, fontFamily: "Inter_400Regular", color: "#444460" },
+  commentHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
+  commentName: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: C.subtext },
+  commentTime: { fontSize: 11, fontFamily: "Inter_400Regular", color: C.dim },
+  commentText: { fontSize: 14, fontFamily: "Inter_400Regular", color: "#C8D0E8", lineHeight: 20 },
+  noComments: { paddingVertical: 24, alignItems: "center", gap: 8 },
+  noCommentsText: { fontSize: 14, fontFamily: "Inter_400Regular", color: C.dim },
   inputBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -457,28 +340,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#141420",
-    backgroundColor: "#0A0A0F",
+    borderTopColor: C.border,
+    backgroundColor: "#040410",
   },
   commentInput: {
     flex: 1,
-    backgroundColor: "#0D0D18",
+    backgroundColor: C.card,
     borderRadius: 22,
     paddingHorizontal: 16,
     paddingVertical: 10,
     fontSize: 14,
     fontFamily: "Inter_400Regular",
-    color: "#F0F0FA",
+    color: C.text,
     borderWidth: 1,
-    borderColor: "#1E1E32",
+    borderColor: C.border2,
   },
   sendBtn: {
-    backgroundColor: "#00D4FF",
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    backgroundColor: C.primary,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: C.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
   },
-  sendBtnDisabled: { opacity: 0.35 },
+  sendBtnDisabled: { opacity: 0.35, shadowColor: "transparent" },
 });
