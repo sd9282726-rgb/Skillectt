@@ -1,27 +1,31 @@
-kind = "mobile"
+kind = "web"
 previewPath = "/"
 title = "Skillect"
 version = "1.0.0"
 id = "artifacts/skillect"
-router = "expo-domain"
+router = "path"
 
 [[integratedSkills]]
-name = "expo"
+name = "react-vite"
 version = "1.0.0"
 
 [[services]]
-ensurePreviewReachable = "/status"
-name = "expo"
+name = "web"
 paths = [ "/" ]
-localPort = 24346
+localPort = 20391
 
 [services.development]
 run = "pnpm --filter @workspace/skillect run dev"
 
 [services.production]
 build = [ "pnpm", "--filter", "@workspace/skillect", "run", "build" ]
-run = [ "pnpm", "--filter", "@workspace/skillect", "run", "serve" ]
+publicDir = "artifacts/skillect/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
 
 [services.env]
-PORT = "24346"
+PORT = "20391"
 BASE_PATH = "/"

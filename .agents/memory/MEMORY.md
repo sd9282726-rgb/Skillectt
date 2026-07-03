@@ -1,0 +1,1 @@
+- [Porting Expo/RN app to React+Vite](expo-to-vite-port.md) — treat as 1:1 port when colors/data-model/screens are fully specified; skip design subagent, port directly.
