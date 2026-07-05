@@ -8,3 +8,144 @@
 export interface HealthStatus {
   status: string;
 }
+
+export interface Profile {
+  id: string;
+  name: string;
+  username: string;
+  avatar: string;
+  bio: string;
+  location: string;
+  skills: string[];
+  onboarded: boolean;
+  followerCount: number;
+  followingCount: number;
+  isFollowedByMe: boolean;
+  createdAt: string;
+}
+
+export interface ProfileUpdate {
+  name?: string;
+  bio?: string;
+  location?: string;
+  skills?: string[];
+}
+
+export interface Post {
+  id: number;
+  authorId: string;
+  author: Profile;
+  content: string;
+  /** @nullable */
+  image: string | null;
+  tags: string[];
+  likeCount: number;
+  commentCount: number;
+  likedByMe: boolean;
+  createdAt: string;
+}
+
+export interface PostInput {
+  /** @minLength 1 */
+  content: string;
+  image?: string;
+  tags?: string[];
+}
+
+export interface Comment {
+  id: number;
+  postId: number;
+  authorId: string;
+  author: Profile;
+  content: string;
+  createdAt: string;
+}
+
+export interface CommentInput {
+  /** @minLength 1 */
+  content: string;
+}
+
+export interface ProjectLink {
+  label: string;
+  url: string;
+}
+
+export interface Project {
+  id: number;
+  authorId: string;
+  author: Profile;
+  title: string;
+  description: string;
+  /** @nullable */
+  image: string | null;
+  tags: string[];
+  links: ProjectLink[];
+  createdAt: string;
+}
+
+export interface ProjectInput {
+  /** @minLength 1 */
+  title: string;
+  description?: string;
+  image?: string;
+  tags?: string[];
+  links?: ProjectLink[];
+}
+
+export interface Community {
+  id: number;
+  name: string;
+  description: string;
+  cover: string;
+  tags: string[];
+  memberCount: number;
+  isJoinedByMe: boolean;
+  members?: Profile[];
+  createdAt: string;
+}
+
+export interface Message {
+  id: number;
+  conversationId: number;
+  senderId: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface MessageInput {
+  /** @minLength 1 */
+  content: string;
+}
+
+export interface ConversationInput {
+  userId: string;
+}
+
+export interface Conversation {
+  id: number;
+  participants: Profile[];
+  messages: Message[];
+  createdAt: string;
+}
+
+export type ListProfilesParams = {
+  q?: string;
+};
+
+export type ListPostsParams = {
+  authorId?: string;
+  sort?: ListPostsSort;
+  q?: string;
+};
+
+export type ListPostsSort = (typeof ListPostsSort)[keyof typeof ListPostsSort];
+
+export const ListPostsSort = {
+  new: "new",
+  trending: "trending",
+} as const;
+
+export type ListProjectsParams = {
+  authorId?: string;
+};

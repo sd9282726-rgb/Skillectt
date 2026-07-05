@@ -1,4 +1,4 @@
-import type { Project } from "@/context/AppContext";
+import type { Project } from "@workspace/api-client-react";
 import { ExternalLink } from "lucide-react";
 
 export default function ProjectCard({ project }: { project: Project }) {

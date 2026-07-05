@@ -4,14 +4,14 @@ import { ArrowLeft, X } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 
 export default function EditProfile() {
-  const { getCurrentProfile, updateProfile } = useApp();
-  const profile = getCurrentProfile();
+  const { profile, updateProfile } = useApp();
   const [, setLocation] = useLocation();
   const [name, setName] = useState(profile?.name ?? "");
   const [bio, setBio] = useState(profile?.bio ?? "");
   const [location, setLocationField] = useState(profile?.location ?? "");
   const [skillInput, setSkillInput] = useState("");
   const [skills, setSkills] = useState<string[]>(profile?.skills ?? []);
+  const [saving, setSaving] = useState(false);
 
   if (!profile) return null;
 
@@ -21,9 +21,14 @@ export default function EditProfile() {
     setSkillInput("");
   };
 
-  const handleSave = () => {
-    updateProfile({ name, bio, location, skills });
-    setLocation("/profile");
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateProfile({ name, bio, location, skills });
+      setLocation("/profile");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -107,7 +112,8 @@ export default function EditProfile() {
       <button
         type="button"
         onClick={handleSave}
-        className="w-full mt-8 rounded-full py-3 text-sm font-semibold bg-primary text-primary-foreground shadow-[0_0_18px_var(--primary-glow)] hover-elevate"
+        disabled={saving}
+        className="w-full mt-8 rounded-full py-3 text-sm font-semibold bg-primary text-primary-foreground shadow-[0_0_18px_var(--primary-glow)] hover-elevate disabled:opacity-40"
       >
         Save changes
       </button>

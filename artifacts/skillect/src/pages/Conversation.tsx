@@ -1,32 +1,61 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { ArrowLeft, Send } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetConversation,
+  useSendMessage,
+  getGetConversationQueryKey,
+} from "@workspace/api-client-react";
 import { useApp } from "@/context/AppContext";
 import { timeAgo } from "@/lib/time";
 
 export default function Conversation({ id }: { id: string }) {
-  const { conversations, currentUserId, getProfile, sendMessage } = useApp();
+  const conversationId = Number(id);
+  const { currentUserId } = useApp();
   const [, setLocation] = useLocation();
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
-  const conv = conversations.find((c) => c.id === id);
+  const queryClient = useQueryClient();
+
+  const { data: conv, isLoading, isError } = useGetConversation(conversationId, {
+    query: {
+      queryKey: getGetConversationQueryKey(conversationId),
+      enabled: !!conversationId,
+      refetchInterval: 5000,
+      refetchOnWindowFocus: true,
+    },
+  });
+  const sendMessageMutation = useSendMessage();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [conv?.messages.length]);
 
-  if (!conv) {
+  if (isError) {
     setLocation("/messages", { replace: true });
     return null;
   }
 
-  const otherId = conv.participantIds.find((pid) => pid !== currentUserId);
-  const other = otherId ? getProfile(otherId) : undefined;
+  if (isLoading || !conv) return null;
+
+  const other = conv.participants.find((p) => p.id !== currentUserId);
 
   const handleSend = () => {
     if (!text.trim()) return;
-    sendMessage(conv.id, text.trim());
-    setText("");
+    sendMessageMutation.mutate(
+      { id: conv.id, data: { content: text.trim() } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            predicate: (query) =>
+              typeof query.queryKey[0] === "string" &&
+              query.queryKey[0].startsWith("/api/conversations"),
+          });
+          setText("");
+        },
+      },
+    );
   };
 
   return (

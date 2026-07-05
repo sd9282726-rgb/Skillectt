@@ -112,8 +112,8 @@ function HomeRedirect() {
 }
 
 function OnboardingGate() {
-  const { getCurrentProfile } = useApp();
-  const profile = getCurrentProfile();
+  const { profile, isProfileLoading } = useApp();
+  if (isProfileLoading) return null;
   if (profile && !profile.onboarded) {
     return <Onboarding />;
   }

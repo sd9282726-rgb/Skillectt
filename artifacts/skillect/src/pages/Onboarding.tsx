@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useApp } from "@/context/AppContext";
 
 const SUGGESTED_SKILLS = [
@@ -15,12 +16,13 @@ const SUGGESTED_SKILLS = [
 ];
 
 export default function Onboarding() {
-  const { getCurrentProfile, completeOnboarding } = useApp();
-  const profile = getCurrentProfile();
+  const { profile, completeOnboarding } = useApp();
+  const [, setLocation] = useLocation();
   const [name, setName] = useState(profile?.name ?? "");
   const [bio, setBio] = useState("");
-  const [location, setLocation] = useState("");
+  const [location, setLocation2] = useState("");
   const [skills, setSkills] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
 
   const toggleSkill = (skill: string) => {
     setSkills((prev) =>
@@ -28,8 +30,14 @@ export default function Onboarding() {
     );
   };
 
-  const handleSubmit = () => {
-    completeOnboarding({ name, bio, location, skills });
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      await completeOnboarding({ name, bio, location, skills });
+      setLocation("/");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -68,7 +76,7 @@ export default function Onboarding() {
             <label className="text-sm font-medium mb-1.5 block">Location</label>
             <input
               value={location}
-              onChange={(e) => setLocation(e.target.value)}
+              onChange={(e) => setLocation2(e.target.value)}
               placeholder="City, Country"
               className="w-full rounded-xl bg-input border border-border px-4 py-2.5 text-sm outline-none focus:border-primary transition-colors"
             />
@@ -100,7 +108,7 @@ export default function Onboarding() {
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={!name}
+          disabled={!name || submitting}
           className="w-full mt-8 rounded-full py-3 text-sm font-semibold bg-primary text-primary-foreground shadow-[0_0_18px_var(--primary-glow)] hover-elevate disabled:opacity-40 disabled:pointer-events-none"
         >
           Enter Skillect

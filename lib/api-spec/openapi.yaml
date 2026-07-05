@@ -10,6 +10,16 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: profiles
+    description: Profile operations
+  - name: posts
+    description: Post operations
+  - name: projects
+    description: Project operations
+  - name: communities
+    description: Community operations
+  - name: conversations
+    description: Messaging operations
 paths:
   /healthz:
     get:
@@ -24,6 +34,475 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /profiles/me:
+    get:
+      operationId: getMyProfile
+      tags: [profiles]
+      summary: Get (and JIT-provision) the current authenticated user's profile
+      responses:
+        "200":
+          description: Current profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+        "401":
+          description: Unauthorized
+    patch:
+      operationId: updateMyProfile
+      tags: [profiles]
+      summary: Update current user's profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdate"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+        "401":
+          description: Unauthorized
+
+  /profiles/me/onboarding:
+    post:
+      operationId: completeOnboarding
+      tags: [profiles]
+      summary: Complete onboarding for the current user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdate"
+      responses:
+        "200":
+          description: Onboarded profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+        "401":
+          description: Unauthorized
+
+  /profiles:
+    get:
+      operationId: listProfiles
+      tags: [profiles]
+      summary: Search / list profiles
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Profile"
+
+  /profiles/{id}:
+    get:
+      operationId: getProfile
+      tags: [profiles]
+      summary: Get a profile by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+        "404":
+          description: Not found
+
+  /profiles/{id}/follow:
+    post:
+      operationId: followProfile
+      tags: [profiles]
+      summary: Follow a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Followed
+        "401":
+          description: Unauthorized
+    delete:
+      operationId: unfollowProfile
+      tags: [profiles]
+      summary: Unfollow a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Unfollowed
+        "401":
+          description: Unauthorized
+
+  /posts:
+    get:
+      operationId: listPosts
+      tags: [posts]
+      summary: List posts
+      parameters:
+        - name: authorId
+          in: query
+          schema:
+            type: string
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [new, trending]
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of posts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Post"
+    post:
+      operationId: createPost
+      tags: [posts]
+      summary: Create a post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostInput"
+      responses:
+        "201":
+          description: Created post
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "401":
+          description: Unauthorized
+
+  /posts/{id}:
+    get:
+      operationId: getPost
+      tags: [posts]
+      summary: Get a post by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Post
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "404":
+          description: Not found
+
+  /posts/{id}/like:
+    post:
+      operationId: likePost
+      tags: [posts]
+      summary: Like a post
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Liked
+        "401":
+          description: Unauthorized
+    delete:
+      operationId: unlikePost
+      tags: [posts]
+      summary: Unlike a post
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Unliked
+        "401":
+          description: Unauthorized
+
+  /posts/{id}/comments:
+    get:
+      operationId: listComments
+      tags: [posts]
+      summary: List comments for a post
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of comments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Comment"
+    post:
+      operationId: createComment
+      tags: [posts]
+      summary: Add a comment to a post
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentInput"
+      responses:
+        "201":
+          description: Created comment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+        "401":
+          description: Unauthorized
+
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List projects
+      parameters:
+        - name: authorId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Create a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "201":
+          description: Created project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "401":
+          description: Unauthorized
+
+  /communities:
+    get:
+      operationId: listCommunities
+      tags: [communities]
+      summary: List communities
+      responses:
+        "200":
+          description: List of communities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Community"
+
+  /communities/{id}:
+    get:
+      operationId: getCommunity
+      tags: [communities]
+      summary: Get a community by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Community
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Community"
+        "404":
+          description: Not found
+
+  /communities/{id}/join:
+    post:
+      operationId: joinCommunity
+      tags: [communities]
+      summary: Join a community
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Joined
+        "401":
+          description: Unauthorized
+    delete:
+      operationId: leaveCommunity
+      tags: [communities]
+      summary: Leave a community
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Left
+        "401":
+          description: Unauthorized
+
+  /conversations:
+    get:
+      operationId: listConversations
+      tags: [conversations]
+      summary: List current user's conversations
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Conversation"
+        "401":
+          description: Unauthorized
+    post:
+      operationId: startConversation
+      tags: [conversations]
+      summary: Start (or reuse) a conversation with another user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationInput"
+      responses:
+        "201":
+          description: Conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+        "401":
+          description: Unauthorized
+
+  /conversations/{id}:
+    get:
+      operationId: getConversation
+      tags: [conversations]
+      summary: Get a conversation by id (with messages)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+        "401":
+          description: Unauthorized
+        "404":
+          description: Not found
+
+  /conversations/{id}/messages:
+    post:
+      operationId: sendMessage
+      tags: [conversations]
+      summary: Send a message in a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageInput"
+      responses:
+        "201":
+          description: Created message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "401":
+          description: Unauthorized
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +513,176 @@ components:
       required:
         - status
 
+    Profile:
+      type: object
+      required:
+        [id, name, username, avatar, bio, location, skills, onboarded, followerCount, followingCount, isFollowedByMe, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        username: { type: string }
+        avatar: { type: string }
+        bio: { type: string }
+        location: { type: string }
+        skills:
+          type: array
+          items: { type: string }
+        onboarded: { type: boolean }
+        followerCount: { type: integer }
+        followingCount: { type: integer }
+        isFollowedByMe: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    ProfileUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        bio: { type: string }
+        location: { type: string }
+        skills:
+          type: array
+          items: { type: string }
+
+    Post:
+      type: object
+      required: [id, authorId, author, content, image, tags, likeCount, commentCount, likedByMe, createdAt]
+      properties:
+        id: { type: integer }
+        authorId: { type: string }
+        author:
+          $ref: "#/components/schemas/Profile"
+        content: { type: string }
+        image: { type: ["string", "null"] }
+        tags:
+          type: array
+          items: { type: string }
+        likeCount: { type: integer }
+        commentCount: { type: integer }
+        likedByMe: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    PostInput:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string, minLength: 1 }
+        image: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+
+    Comment:
+      type: object
+      required: [id, postId, authorId, author, content, createdAt]
+      properties:
+        id: { type: integer }
+        postId: { type: integer }
+        authorId: { type: string }
+        author:
+          $ref: "#/components/schemas/Profile"
+        content: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    CommentInput:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string, minLength: 1 }
+
+    ProjectLink:
+      type: object
+      required: [label, url]
+      properties:
+        label: { type: string }
+        url: { type: string }
+
+    Project:
+      type: object
+      required: [id, authorId, author, title, description, image, tags, links, createdAt]
+      properties:
+        id: { type: integer }
+        authorId: { type: string }
+        author:
+          $ref: "#/components/schemas/Profile"
+        title: { type: string }
+        description: { type: string }
+        image: { type: ["string", "null"] }
+        tags:
+          type: array
+          items: { type: string }
+        links:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProjectLink"
+        createdAt: { type: string, format: date-time }
+
+    ProjectInput:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1 }
+        description: { type: string }
+        image: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        links:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProjectLink"
+
+    Community:
+      type: object
+      required: [id, name, description, cover, tags, memberCount, isJoinedByMe, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: string }
+        cover: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        memberCount: { type: integer }
+        isJoinedByMe: { type: boolean }
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/Profile"
+        createdAt: { type: string, format: date-time }
+
+    Message:
+      type: object
+      required: [id, conversationId, senderId, content, createdAt]
+      properties:
+        id: { type: integer }
+        conversationId: { type: integer }
+        senderId: { type: string }
+        content: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    MessageInput:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string, minLength: 1 }
+
+    ConversationInput:
+      type: object
+      required: [userId]
+      properties:
+        userId: { type: string }
+
+    Conversation:
+      type: object
+      required: [id, participants, messages, createdAt]
+      properties:
+        id: { type: integer }
+        participants:
+          type: array
+          items:
+            $ref: "#/components/schemas/Profile"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+        createdAt: { type: string, format: date-time }

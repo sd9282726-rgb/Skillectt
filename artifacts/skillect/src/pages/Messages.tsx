@@ -1,30 +1,33 @@
 import { Link } from "wouter";
+import {
+  useListConversations,
+  getListConversationsQueryKey,
+} from "@workspace/api-client-react";
 import { useApp } from "@/context/AppContext";
 import { timeAgo } from "@/lib/time";
 
 export default function Messages() {
-  const { conversations, currentUserId, getProfile } = useApp();
-
-  const lastAt = (c: (typeof conversations)[number]) =>
-    c.messages.length > 0 ? c.messages[c.messages.length - 1].createdAt : 0;
-
-  const mine = conversations
-    .filter((c) => c.participantIds.includes(currentUserId ?? ""))
-    .sort((a, b) => lastAt(b) - lastAt(a));
+  const { currentUserId } = useApp();
+  const { data: conversations = [], isLoading } = useListConversations({
+    query: {
+      queryKey: getListConversationsQueryKey(),
+      refetchInterval: 10000,
+      refetchOnWindowFocus: true,
+    },
+  });
 
   return (
     <div className="max-w-2xl mx-auto px-4 md:px-6 py-6">
       <h1 className="text-xl font-bold mb-4 hidden md:block">Messages</h1>
 
-      {mine.length === 0 ? (
+      {!isLoading && conversations.length === 0 ? (
         <p className="text-center text-sm text-muted-foreground py-16">
           No conversations yet. Visit someone's profile to say hi!
         </p>
       ) : (
         <div className="space-y-1">
-          {mine.map((conv) => {
-            const otherId = conv.participantIds.find((id) => id !== currentUserId);
-            const other = otherId ? getProfile(otherId) : undefined;
+          {conversations.map((conv) => {
+            const other = conv.participants.find((p) => p.id !== currentUserId);
             const lastMessage = conv.messages[conv.messages.length - 1];
             if (!other) return null;
             return (

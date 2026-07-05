@@ -1,11 +1,10 @@
 import { Link } from "wouter";
 import { PlusSquare } from "lucide-react";
-import { useApp } from "@/context/AppContext";
+import { useListPosts } from "@workspace/api-client-react";
 import PostCard from "@/components/PostCard";
 
 export default function Feed() {
-  const { posts } = useApp();
-  const sorted = [...posts].sort((a, b) => b.createdAt - a.createdAt);
+  const { data: posts = [], isLoading } = useListPosts({ sort: "new" });
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -20,12 +19,12 @@ export default function Feed() {
         </Link>
       </div>
 
-      {sorted.length === 0 ? (
+      {!isLoading && posts.length === 0 ? (
         <p className="text-center text-sm text-muted-foreground py-16">
           No posts yet. Be the first to share something!
         </p>
       ) : (
-        sorted.map((post) => <PostCard key={post.id} post={post} />)
+        posts.map((post) => <PostCard key={post.id} post={post} />)
       )}
     </div>
   );

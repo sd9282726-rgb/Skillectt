@@ -1,11 +1,24 @@
 import { Link } from "wouter";
 import { ArrowLeft } from "lucide-react";
-import { useApp } from "@/context/AppContext";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetCommunity,
+  useJoinCommunity,
+  useLeaveCommunity,
+  getListCommunitiesQueryKey,
+  getGetCommunityQueryKey,
+} from "@workspace/api-client-react";
 
 export default function CommunityDetail({ id }: { id: string }) {
-  const { communities, currentUserId, joinCommunity, leaveCommunity, getProfile } =
-    useApp();
-  const community = communities.find((c) => c.id === id);
+  const communityId = Number(id);
+  const queryClient = useQueryClient();
+  const { data: community, isLoading } = useGetCommunity(communityId, {
+    query: { queryKey: getGetCommunityQueryKey(communityId), enabled: !!communityId },
+  });
+  const joinMutation = useJoinCommunity();
+  const leaveMutation = useLeaveCommunity();
+
+  if (isLoading) return null;
 
   if (!community) {
     return (
@@ -15,7 +28,15 @@ export default function CommunityDetail({ id }: { id: string }) {
     );
   }
 
-  const joined = currentUserId ? community.members.includes(currentUserId) : false;
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: getGetCommunityQueryKey(communityId) });
+    queryClient.invalidateQueries({ queryKey: getListCommunitiesQueryKey() });
+  };
+
+  const toggleJoin = () => {
+    const mutation = community.isJoinedByMe ? leaveMutation : joinMutation;
+    mutation.mutate({ id: communityId }, { onSuccess: invalidate });
+  };
 
   return (
     <div className="max-w-2xl mx-auto pb-10">
@@ -33,21 +54,19 @@ export default function CommunityDetail({ id }: { id: string }) {
           <div>
             <h1 className="text-xl font-bold">{community.name}</h1>
             <p className="text-xs text-muted-foreground mt-1">
-              {community.members.length} members
+              {community.memberCount} members
             </p>
           </div>
           <button
             type="button"
-            onClick={() =>
-              joined ? leaveCommunity(community.id) : joinCommunity(community.id)
-            }
+            onClick={toggleJoin}
             className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-              joined
+              community.isJoinedByMe
                 ? "border border-border text-muted-foreground hover-elevate"
                 : "bg-primary text-primary-foreground shadow-[0_0_14px_var(--primary-glow)] hover-elevate"
             }`}
           >
-            {joined ? "Joined" : "Join"}
+            {community.isJoinedByMe ? "Joined" : "Join"}
           </button>
         </div>
         <p className="text-sm text-muted-foreground mt-3 leading-relaxed">
@@ -63,29 +82,26 @@ export default function CommunityDetail({ id }: { id: string }) {
 
         <h2 className="text-sm font-semibold mt-8 mb-3">Members</h2>
         <div className="space-y-2">
-          {community.members.map((memberId) => {
-            const member = getProfile(memberId);
-            if (!member) return null;
-            return (
-              <Link
-                key={memberId}
-                href={`/user/${memberId}`}
-                className="flex items-center gap-3 rounded-xl border border-border p-3 hover-elevate"
-              >
-                <img
-                  src={member.avatar}
-                  alt={member.name}
-                  className="h-10 w-10 rounded-full object-cover border border-border"
-                />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold truncate">{member.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    @{member.username}
-                  </p>
-                </div>
-              </Link>
-            );
-          })}
+          {(community.members ?? []).map((member) => (
+            <Link
+              key={member.id}
+              href={`/user/${member.id}`}
+              className="flex items-center gap-3 rounded-xl border border-border p-3 hover-elevate"
+            >
+              <img
+                src={member.avatar}
+                alt={member.name}
+                className="h-10 w-10 rounded-full object-cover border border-border"
+              />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold truncate">{member.name}</p>
+                <p className="text-xs text-muted-foreground truncate">@{member.username}</p>
+              </div>
+            </Link>
+          ))}
+          {(community.members ?? []).length === 0 && (
+            <p className="text-sm text-muted-foreground">No members yet.</p>
+          )}
         </div>
       </div>
     </div>

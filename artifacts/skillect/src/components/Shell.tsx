@@ -21,8 +21,7 @@ const NAV_ITEMS = [
 
 export default function Shell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
-  const { getCurrentProfile } = useApp();
-  const profile = getCurrentProfile();
+  const { profile } = useApp();
 
   return (
     <div className="min-h-[100dvh] w-full bg-background text-foreground flex">

@@ -14,3 +14,495 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * @summary Get (and JIT-provision) the current authenticated user's profile
+ */
+export const GetMyProfileResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  username: zod.string(),
+  avatar: zod.string(),
+  bio: zod.string(),
+  location: zod.string(),
+  skills: zod.array(zod.string()),
+  onboarded: zod.boolean(),
+  followerCount: zod.number(),
+  followingCount: zod.number(),
+  isFollowedByMe: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Update current user's profile
+ */
+export const UpdateMyProfileBody = zod.object({
+  name: zod.string().optional(),
+  bio: zod.string().optional(),
+  location: zod.string().optional(),
+  skills: zod.array(zod.string()).optional(),
+});
+
+export const UpdateMyProfileResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  username: zod.string(),
+  avatar: zod.string(),
+  bio: zod.string(),
+  location: zod.string(),
+  skills: zod.array(zod.string()),
+  onboarded: zod.boolean(),
+  followerCount: zod.number(),
+  followingCount: zod.number(),
+  isFollowedByMe: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Complete onboarding for the current user
+ */
+export const CompleteOnboardingBody = zod.object({
+  name: zod.string().optional(),
+  bio: zod.string().optional(),
+  location: zod.string().optional(),
+  skills: zod.array(zod.string()).optional(),
+});
+
+export const CompleteOnboardingResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  username: zod.string(),
+  avatar: zod.string(),
+  bio: zod.string(),
+  location: zod.string(),
+  skills: zod.array(zod.string()),
+  onboarded: zod.boolean(),
+  followerCount: zod.number(),
+  followingCount: zod.number(),
+  isFollowedByMe: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Search / list profiles
+ */
+export const ListProfilesQueryParams = zod.object({
+  q: zod.coerce.string().optional(),
+});
+
+export const ListProfilesResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  username: zod.string(),
+  avatar: zod.string(),
+  bio: zod.string(),
+  location: zod.string(),
+  skills: zod.array(zod.string()),
+  onboarded: zod.boolean(),
+  followerCount: zod.number(),
+  followingCount: zod.number(),
+  isFollowedByMe: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+export const ListProfilesResponse = zod.array(ListProfilesResponseItem);
+
+/**
+ * @summary Get a profile by id
+ */
+export const GetProfileParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const GetProfileResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  username: zod.string(),
+  avatar: zod.string(),
+  bio: zod.string(),
+  location: zod.string(),
+  skills: zod.array(zod.string()),
+  onboarded: zod.boolean(),
+  followerCount: zod.number(),
+  followingCount: zod.number(),
+  isFollowedByMe: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Follow a user
+ */
+export const FollowProfileParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+/**
+ * @summary Unfollow a user
+ */
+export const UnfollowProfileParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+/**
+ * @summary List posts
+ */
+export const ListPostsQueryParams = zod.object({
+  authorId: zod.coerce.string().optional(),
+  sort: zod.enum(["new", "trending"]).optional(),
+  q: zod.coerce.string().optional(),
+});
+
+export const ListPostsResponseItem = zod.object({
+  id: zod.number(),
+  authorId: zod.string(),
+  author: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    username: zod.string(),
+    avatar: zod.string(),
+    bio: zod.string(),
+    location: zod.string(),
+    skills: zod.array(zod.string()),
+    onboarded: zod.boolean(),
+    followerCount: zod.number(),
+    followingCount: zod.number(),
+    isFollowedByMe: zod.boolean(),
+    createdAt: zod.coerce.date(),
+  }),
+  content: zod.string(),
+  image: zod.string().nullable(),
+  tags: zod.array(zod.string()),
+  likeCount: zod.number(),
+  commentCount: zod.number(),
+  likedByMe: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+export const ListPostsResponse = zod.array(ListPostsResponseItem);
+
+/**
+ * @summary Create a post
+ */
+
+export const CreatePostBody = zod.object({
+  content: zod.string().min(1),
+  image: zod.string().optional(),
+  tags: zod.array(zod.string()).optional(),
+});
+
+/**
+ * @summary Get a post by id
+ */
+export const GetPostParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetPostResponse = zod.object({
+  id: zod.number(),
+  authorId: zod.string(),
+  author: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    username: zod.string(),
+    avatar: zod.string(),
+    bio: zod.string(),
+    location: zod.string(),
+    skills: zod.array(zod.string()),
+    onboarded: zod.boolean(),
+    followerCount: zod.number(),
+    followingCount: zod.number(),
+    isFollowedByMe: zod.boolean(),
+    createdAt: zod.coerce.date(),
+  }),
+  content: zod.string(),
+  image: zod.string().nullable(),
+  tags: zod.array(zod.string()),
+  likeCount: zod.number(),
+  commentCount: zod.number(),
+  likedByMe: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Like a post
+ */
+export const LikePostParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Unlike a post
+ */
+export const UnlikePostParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List comments for a post
+ */
+export const ListCommentsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListCommentsResponseItem = zod.object({
+  id: zod.number(),
+  postId: zod.number(),
+  authorId: zod.string(),
+  author: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    username: zod.string(),
+    avatar: zod.string(),
+    bio: zod.string(),
+    location: zod.string(),
+    skills: zod.array(zod.string()),
+    onboarded: zod.boolean(),
+    followerCount: zod.number(),
+    followingCount: zod.number(),
+    isFollowedByMe: zod.boolean(),
+    createdAt: zod.coerce.date(),
+  }),
+  content: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+export const ListCommentsResponse = zod.array(ListCommentsResponseItem);
+
+/**
+ * @summary Add a comment to a post
+ */
+export const CreateCommentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CreateCommentBody = zod.object({
+  content: zod.string().min(1),
+});
+
+/**
+ * @summary List projects
+ */
+export const ListProjectsQueryParams = zod.object({
+  authorId: zod.coerce.string().optional(),
+});
+
+export const ListProjectsResponseItem = zod.object({
+  id: zod.number(),
+  authorId: zod.string(),
+  author: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    username: zod.string(),
+    avatar: zod.string(),
+    bio: zod.string(),
+    location: zod.string(),
+    skills: zod.array(zod.string()),
+    onboarded: zod.boolean(),
+    followerCount: zod.number(),
+    followingCount: zod.number(),
+    isFollowedByMe: zod.boolean(),
+    createdAt: zod.coerce.date(),
+  }),
+  title: zod.string(),
+  description: zod.string(),
+  image: zod.string().nullable(),
+  tags: zod.array(zod.string()),
+  links: zod.array(
+    zod.object({
+      label: zod.string(),
+      url: zod.string(),
+    }),
+  ),
+  createdAt: zod.coerce.date(),
+});
+export const ListProjectsResponse = zod.array(ListProjectsResponseItem);
+
+/**
+ * @summary Create a project
+ */
+
+export const CreateProjectBody = zod.object({
+  title: zod.string().min(1),
+  description: zod.string().optional(),
+  image: zod.string().optional(),
+  tags: zod.array(zod.string()).optional(),
+  links: zod
+    .array(
+      zod.object({
+        label: zod.string(),
+        url: zod.string(),
+      }),
+    )
+    .optional(),
+});
+
+/**
+ * @summary List communities
+ */
+export const ListCommunitiesResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  description: zod.string(),
+  cover: zod.string(),
+  tags: zod.array(zod.string()),
+  memberCount: zod.number(),
+  isJoinedByMe: zod.boolean(),
+  members: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        username: zod.string(),
+        avatar: zod.string(),
+        bio: zod.string(),
+        location: zod.string(),
+        skills: zod.array(zod.string()),
+        onboarded: zod.boolean(),
+        followerCount: zod.number(),
+        followingCount: zod.number(),
+        isFollowedByMe: zod.boolean(),
+        createdAt: zod.coerce.date(),
+      }),
+    )
+    .optional(),
+  createdAt: zod.coerce.date(),
+});
+export const ListCommunitiesResponse = zod.array(ListCommunitiesResponseItem);
+
+/**
+ * @summary Get a community by id
+ */
+export const GetCommunityParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetCommunityResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  description: zod.string(),
+  cover: zod.string(),
+  tags: zod.array(zod.string()),
+  memberCount: zod.number(),
+  isJoinedByMe: zod.boolean(),
+  members: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        username: zod.string(),
+        avatar: zod.string(),
+        bio: zod.string(),
+        location: zod.string(),
+        skills: zod.array(zod.string()),
+        onboarded: zod.boolean(),
+        followerCount: zod.number(),
+        followingCount: zod.number(),
+        isFollowedByMe: zod.boolean(),
+        createdAt: zod.coerce.date(),
+      }),
+    )
+    .optional(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Join a community
+ */
+export const JoinCommunityParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Leave a community
+ */
+export const LeaveCommunityParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List current user's conversations
+ */
+export const ListConversationsResponseItem = zod.object({
+  id: zod.number(),
+  participants: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      username: zod.string(),
+      avatar: zod.string(),
+      bio: zod.string(),
+      location: zod.string(),
+      skills: zod.array(zod.string()),
+      onboarded: zod.boolean(),
+      followerCount: zod.number(),
+      followingCount: zod.number(),
+      isFollowedByMe: zod.boolean(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  messages: zod.array(
+    zod.object({
+      id: zod.number(),
+      conversationId: zod.number(),
+      senderId: zod.string(),
+      content: zod.string(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  createdAt: zod.coerce.date(),
+});
+export const ListConversationsResponse = zod.array(
+  ListConversationsResponseItem,
+);
+
+/**
+ * @summary Start (or reuse) a conversation with another user
+ */
+export const StartConversationBody = zod.object({
+  userId: zod.string(),
+});
+
+/**
+ * @summary Get a conversation by id (with messages)
+ */
+export const GetConversationParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetConversationResponse = zod.object({
+  id: zod.number(),
+  participants: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      username: zod.string(),
+      avatar: zod.string(),
+      bio: zod.string(),
+      location: zod.string(),
+      skills: zod.array(zod.string()),
+      onboarded: zod.boolean(),
+      followerCount: zod.number(),
+      followingCount: zod.number(),
+      isFollowedByMe: zod.boolean(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  messages: zod.array(
+    zod.object({
+      id: zod.number(),
+      conversationId: zod.number(),
+      senderId: zod.string(),
+      content: zod.string(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Send a message in a conversation
+ */
+export const SendMessageParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const SendMessageBody = zod.object({
+  content: zod.string().min(1),
+});

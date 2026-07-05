@@ -1,5 +1,6 @@
-export function timeAgo(timestamp: number): string {
-  const diffMs = Date.now() - timestamp;
+export function timeAgo(timestamp: string | number): string {
+  const time = typeof timestamp === "string" ? new Date(timestamp).getTime() : timestamp;
+  const diffMs = Date.now() - time;
   const diffSec = Math.floor(diffMs / 1000);
   if (diffSec < 60) return "just now";
   const diffMin = Math.floor(diffSec / 60);

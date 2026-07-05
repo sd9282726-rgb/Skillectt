@@ -1,16 +1,50 @@
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { ArrowLeft, MapPin, MessageCircle } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetProfile,
+  useFollowProfile,
+  useUnfollowProfile,
+  useListPosts,
+  useListProjects,
+  useStartConversation,
+  getGetProfileQueryKey,
+  getListPostsQueryKey,
+  getListProjectsQueryKey,
+} from "@workspace/api-client-react";
 import { useApp } from "@/context/AppContext";
 import PostCard from "@/components/PostCard";
 import ProjectCard from "@/components/ProjectCard";
 
 export default function UserProfilePage({ id }: { id: string }) {
-  const { getProfile, currentUserId, followUser, unfollowUser, posts, projects, startConversation } =
-    useApp();
+  const { currentUserId } = useApp();
   const [, setLocation] = useLocation();
   const [tab, setTab] = useState<"posts" | "projects">("posts");
-  const profile = getProfile(id);
+  const queryClient = useQueryClient();
+
+  const { data: profile, isLoading } = useGetProfile(id, {
+    query: { queryKey: getGetProfileQueryKey(id), enabled: !!id && id !== currentUserId },
+  });
+  const postsParams = { authorId: id, sort: "new" as const };
+  const projectsParams = { authorId: id };
+  const { data: userPosts = [] } = useListPosts(postsParams, {
+    query: { queryKey: getListPostsQueryKey(postsParams), enabled: !!id },
+  });
+  const { data: userProjects = [] } = useListProjects(projectsParams, {
+    query: { queryKey: getListProjectsQueryKey(projectsParams), enabled: !!id },
+  });
+
+  const followMutation = useFollowProfile();
+  const unfollowMutation = useUnfollowProfile();
+  const startConversationMutation = useStartConversation();
+
+  if (currentUserId && id === currentUserId) {
+    setLocation("/profile", { replace: true });
+    return null;
+  }
+
+  if (isLoading) return null;
 
   if (!profile) {
     return (
@@ -20,22 +54,26 @@ export default function UserProfilePage({ id }: { id: string }) {
     );
   }
 
-  if (profile.id === currentUserId) {
-    setLocation("/profile", { replace: true });
-    return null;
-  }
+  const toggleFollow = () => {
+    const mutation = profile.isFollowedByMe ? unfollowMutation : followMutation;
+    mutation.mutate(
+      { id: profile.id },
+      {
+        onSuccess: () =>
+          queryClient.invalidateQueries({
+            predicate: (query) =>
+              typeof query.queryKey[0] === "string" &&
+              query.queryKey[0].startsWith("/api/profiles"),
+          }),
+      },
+    );
+  };
 
-  const isFollowing = currentUserId ? profile.followers.includes(currentUserId) : false;
-  const userPosts = posts
-    .filter((p) => p.authorId === profile.id)
-    .sort((a, b) => b.createdAt - a.createdAt);
-  const userProjects = projects
-    .filter((p) => p.authorId === profile.id)
-    .sort((a, b) => b.createdAt - a.createdAt);
-
-  const handleMessage = () => {
-    const convId = startConversation(profile.id);
-    setLocation(`/messages/${convId}`);
+  const handleMessage = async () => {
+    const conversation = await startConversationMutation.mutateAsync({
+      data: { userId: profile.id },
+    });
+    setLocation(`/messages/${conversation.id}`);
   };
 
   return (
@@ -56,14 +94,14 @@ export default function UserProfilePage({ id }: { id: string }) {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => (isFollowing ? unfollowUser(profile.id) : followUser(profile.id))}
+              onClick={toggleFollow}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                isFollowing
+                profile.isFollowedByMe
                   ? "border border-border text-muted-foreground hover-elevate"
                   : "bg-primary text-primary-foreground shadow-[0_0_14px_var(--primary-glow)] hover-elevate"
               }`}
             >
-              {isFollowing ? "Following" : "Follow"}
+              {profile.isFollowedByMe ? "Following" : "Follow"}
             </button>
             <button
               type="button"
@@ -100,11 +138,11 @@ export default function UserProfilePage({ id }: { id: string }) {
 
         <div className="flex items-center gap-5 mt-4 text-sm">
           <span>
-            <strong>{profile.followers.length}</strong>{" "}
+            <strong>{profile.followerCount}</strong>{" "}
             <span className="text-muted-foreground">Followers</span>
           </span>
           <span>
-            <strong>{profile.following.length}</strong>{" "}
+            <strong>{profile.followingCount}</strong>{" "}
             <span className="text-muted-foreground">Following</span>
           </span>
         </div>

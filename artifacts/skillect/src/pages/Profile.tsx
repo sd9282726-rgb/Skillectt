@@ -1,25 +1,32 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { Settings, MapPin } from "lucide-react";
+import { useClerk } from "@clerk/react";
+import {
+  useListPosts,
+  useListProjects,
+  getListPostsQueryKey,
+  getListProjectsQueryKey,
+} from "@workspace/api-client-react";
 import { useApp } from "@/context/AppContext";
 import PostCard from "@/components/PostCard";
 import ProjectCard from "@/components/ProjectCard";
-import { useState } from "react";
-import { useClerk } from "@clerk/react";
 
 export default function Profile() {
-  const { getCurrentProfile, posts, projects } = useApp();
-  const profile = getCurrentProfile();
+  const { profile } = useApp();
   const { signOut } = useClerk();
   const [tab, setTab] = useState<"posts" | "projects">("posts");
 
-  if (!profile) return null;
+  const postsParams = { authorId: profile?.id, sort: "new" as const };
+  const projectsParams = { authorId: profile?.id };
+  const { data: myPosts = [] } = useListPosts(postsParams, {
+    query: { queryKey: getListPostsQueryKey(postsParams), enabled: !!profile },
+  });
+  const { data: myProjects = [] } = useListProjects(projectsParams, {
+    query: { queryKey: getListProjectsQueryKey(projectsParams), enabled: !!profile },
+  });
 
-  const myPosts = posts
-    .filter((p) => p.authorId === profile.id)
-    .sort((a, b) => b.createdAt - a.createdAt);
-  const myProjects = projects
-    .filter((p) => p.authorId === profile.id)
-    .sort((a, b) => b.createdAt - a.createdAt);
+  if (!profile) return null;
 
   return (
     <div className="max-w-2xl mx-auto pb-10">
@@ -73,16 +80,12 @@ export default function Profile() {
 
         <div className="flex items-center gap-5 mt-4 text-sm">
           <span>
-            <strong>{profile.followers.length}</strong>{" "}
+            <strong>{profile.followerCount}</strong>{" "}
             <span className="text-muted-foreground">Followers</span>
           </span>
           <span>
-            <strong>{profile.following.length}</strong>{" "}
+            <strong>{profile.followingCount}</strong>{" "}
             <span className="text-muted-foreground">Following</span>
-          </span>
-          <span>
-            <strong>{profile.joinedCommunities.length}</strong>{" "}
-            <span className="text-muted-foreground">Communities</span>
           </span>
         </div>
       </div>

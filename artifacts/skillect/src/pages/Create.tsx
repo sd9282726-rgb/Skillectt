@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Image as ImageIcon, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCreatePost } from "@workspace/api-client-react";
 import { useApp } from "@/context/AppContext";
 
 export default function Create() {
-  const { addPost, getCurrentProfile } = useApp();
-  const profile = getCurrentProfile();
+  const { profile } = useApp();
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  const createPostMutation = useCreatePost();
   const [content, setContent] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
@@ -22,8 +25,25 @@ export default function Create() {
 
   const handleSubmit = () => {
     if (!content.trim()) return;
-    addPost(content.trim(), tags, image.trim() || undefined);
-    setLocation("/");
+    createPostMutation.mutate(
+      {
+        data: {
+          content: content.trim(),
+          tags,
+          image: image.trim() || undefined,
+        },
+      },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            predicate: (query) =>
+              typeof query.queryKey[0] === "string" &&
+              query.queryKey[0].startsWith("/api/posts"),
+          });
+          setLocation("/");
+        },
+      },
+    );
   };
 
   return (
@@ -97,7 +117,7 @@ export default function Create() {
       <button
         type="button"
         onClick={handleSubmit}
-        disabled={!content.trim()}
+        disabled={!content.trim() || createPostMutation.isPending}
         className="w-full rounded-full py-3 text-sm font-semibold bg-primary text-primary-foreground shadow-[0_0_18px_var(--primary-glow)] hover-elevate disabled:opacity-40 disabled:pointer-events-none"
       >
         Post
