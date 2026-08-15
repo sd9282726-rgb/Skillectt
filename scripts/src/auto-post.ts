@@ -69,7 +69,9 @@ async function maybeEngage() {
 
 async function tick() {
   try {
-    await ensureSeedProfilesExist();
+    const hasSeedProfiles = await ensureSeedProfilesExist();
+    if (!hasSeedProfiles) return;
+
     for (const persona of seedPersonas) {
       await maybePost(persona);
     }
