@@ -6,35 +6,43 @@
 
 ---
 
-## Current Migration Status (Oct 2026)
+## Status (Nov 2026)
 
 | Area | Status |
 |------|--------|
-| GitHub as source of truth | ✅ Done |
-| Supabase project connected | ✅ Done |
-| Replit removal | 🔄 In progress |
-| Clerk → Supabase Auth (email only) | 🔄 In progress |
-| Database schema + RLS | 🔄 In progress |
-| Website (preserve + integrate) | Pending |
-| Mobile app completion | Pending |
-| White + colourful design system | Pending |
-| Google Play / Amazon Appstore prep | Pending |
+| GitHub as source of truth | ✅ |
+| Supabase backend (Auth + DB + Storage + RLS) | ✅ |
+| Email-only authentication + verification | ✅ |
+| Password reset | ✅ |
+| Profiles + onboarding | ✅ |
+| Create posts (text + image/video upload) | ✅ |
+| Feed | ✅ |
+| Like / unlike | ✅ |
+| Comments | ✅ |
+| Follow / unfollow | ✅ |
+| Explore + search people | ✅ |
+| View other users | ✅ |
+| Edit own profile | ✅ |
+| Core Replit removal | ✅ |
+| White + blue design on key screens | ✅ |
+| Mobile native app | ⏳ Not started |
+| App Store / Play Store packaging | ⏳ Pending |
+| Messages / Communities | ⏳ Legacy (not fully migrated) |
 
 ---
 
-## Tech Stack (Target)
+## Tech Stack
 
-- **Frontend (Web)**: Vite + React 19 + Tailwind CSS + Radix UI
-- **Backend**: Supabase (Auth + PostgreSQL + Storage + RLS)
-- **Auth**: Email + Password only (mandatory email verification)
-- **Mobile**: To be completed (Expo / React Native)
-- **Hosting**: GitHub + appropriate static/hosting provider for web
+- **Frontend**: Vite + React 19 + Tailwind + Radix UI + Wouter
+- **Backend**: Supabase (Auth, PostgreSQL, Storage, RLS)
+- **Auth**: Email + password only (mandatory email confirmation)
+- **Storage**: `post-media` bucket for images/videos
 
 ---
 
-## Getting Started
+## Setup
 
-### 1. Clone & Install
+### 1. Clone
 
 ```bash
 git clone https://github.com/sd9282726-rgb/Skillectt.git
@@ -48,31 +56,37 @@ pnpm install
 cp .env.example .env
 ```
 
-Fill in the values from your Supabase project (Project Settings → API).
+```
+VITE_SUPABASE_URL=https://chohswyxsckpwyzlbzav.supabase.co
+VITE_SUPABASE_ANON_KEY=<your-anon-key>
+```
 
-### 3. Supabase Project
-
-- Project Ref: `chohswyxsckpwyzlbzav`
-- URL: `https://chohswyxsckpwyzlbzav.supabase.co`
-
-### 4. Development
+### 3. Run
 
 ```bash
-# Web frontend
 pnpm --filter @workspace/skillect run dev
-
-# Typecheck
-pnpm run typecheck
 ```
 
 ---
 
-## Important Notes
+## Working features
 
-- **Never commit** `.env`, service role keys, or PATs.
-- Authentication is being migrated from **Clerk** to **Supabase Auth (email only)**.
-- The existing website design and functionality will be preserved where possible.
-- White is the primary background colour with colourful accents (blue, purple, pink, orange, yellow).
+1. Sign up → email confirmation → login / logout
+2. Onboarding (name, bio, skills)
+3. Create posts with categories, tags, and **direct image/video upload**
+4. Feed with likes
+5. Post detail + comments
+6. Profile + edit profile
+7. Explore people + follow/unfollow
+8. View other user profiles
+
+---
+
+## Notes
+
+- Never commit `.env` or service role keys
+- Mobile app and store packaging remain the largest open items
+- Some legacy pages (Messages, Communities) still need full cleanup
 
 ---
 
