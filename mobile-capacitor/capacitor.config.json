@@ -1,0 +1,8 @@
+{
+  "appId": "com.skillect.app",
+  "appName": "Skillect",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}
