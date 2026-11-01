@@ -1,129 +1,171 @@
 import { useState, useRef, useEffect } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { ArrowLeft, Send } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
-import {
-  useGetConversation,
-  useSendMessage,
-  getGetConversationQueryKey,
-} from "@workspace/api-client-react";
 import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
 import { timeAgo } from "@/lib/time";
 
-export default function Conversation({ id }: { id: string }) {
-  const conversationId = Number(id);
-  const { currentUserId } = useApp();
-  const [, setLocation] = useLocation();
-  const [text, setText] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const queryClient = useQueryClient();
+interface Message {
+  id: string;
+  content: string;
+  sender_id: string;
+  created_at: string;
+}
 
-  const { data: conv, isLoading, isError } = useGetConversation(conversationId, {
-    query: {
-      queryKey: getGetConversationQueryKey(conversationId),
-      enabled: !!conversationId,
-      refetchInterval: 5000,
-      refetchOnWindowFocus: true,
-    },
-  });
-  const sendMessageMutation = useSendMessage();
+interface OtherUser {
+  id: string;
+  display_name: string;
+  username: string;
+  avatar_url?: string | null;
+}
+
+export default function Conversation({ id }: { id: string }) {
+  const { currentUserId } = useApp();
+  const { user } = useAuth();
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [other, setOther] = useState<OtherUser | null>(null);
+  const [text, setText] = useState("");
+  const [loading, setLoading] = useState(true);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const load = async () => {
+      setLoading(true);
+
+      const { data: others } = await supabase
+        .from("conversation_participants")
+        .select("user_id, profiles:user_id (id, display_name, username, avatar_url)")
+        .eq("conversation_id", id)
+        .neq("user_id", user.id)
+        .limit(1);
+
+      if (others?.[0]) {
+        setOther((others[0] as any).profiles);
+      }
+
+      const { data: msgs } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("conversation_id", id)
+        .order("created_at", { ascending: true });
+
+      setMessages((msgs || []) as Message[]);
+      setLoading(false);
+    };
+
+    load();
+
+    const channel = supabase
+      .channel(`messages:${id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${id}`,
+        },
+        (payload) => {
+          setMessages((prev) => [...prev, payload.new as Message]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, user?.id]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [conv?.messages.length]);
+  }, [messages.length]);
 
-  if (isError) {
-    setLocation("/messages", { replace: true });
-    return null;
-  }
+  const handleSend = async () => {
+    if (!text.trim() || !user) return;
+    const content = text.trim();
+    setText("");
 
-  if (isLoading || !conv) return null;
-
-  const other = conv.participants.find((p) => p.id !== currentUserId);
-
-  const handleSend = () => {
-    if (!text.trim()) return;
-    sendMessageMutation.mutate(
-      { id: conv.id, data: { content: text.trim() } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({
-            predicate: (query) =>
-              typeof query.queryKey[0] === "string" &&
-              query.queryKey[0].startsWith("/api/conversations"),
-          });
-          setText("");
-        },
-      },
-    );
+    await supabase.from("messages").insert({
+      conversation_id: id,
+      sender_id: user.id,
+      content,
+    });
   };
 
+  if (loading) {
+    return (
+      <div className="flex justify-center py-16 bg-white min-h-full">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-2xl mx-auto flex flex-col h-[100dvh] md:h-[calc(100dvh)]">
-      <div className="flex items-center gap-3 px-4 md:px-6 py-4 border-b border-border sticky top-0 bg-background/95 backdrop-blur z-10">
-        <Link href="/messages" className="h-9 w-9 rounded-full flex items-center justify-center hover-elevate">
+    <div className="max-w-2xl mx-auto flex flex-col h-[100dvh] md:h-[calc(100dvh)] bg-white">
+      <div className="flex items-center gap-3 px-4 md:px-6 py-4 border-b border-gray-200 sticky top-0 bg-white/95 backdrop-blur z-10">
+        <Link href="/messages" className="h-9 w-9 rounded-full flex items-center justify-center hover:bg-gray-100">
           <ArrowLeft className="h-5 w-5" />
         </Link>
         {other && (
           <>
             <img
-              src={other.avatar}
-              alt={other.name}
-              className="h-9 w-9 rounded-full object-cover border border-border"
+              src={
+                other.avatar_url ||
+                `https://api.dicebear.com/7.x/avataaars/svg?seed=${other.username}`
+              }
+              alt={other.display_name}
+              className="h-9 w-9 rounded-full object-cover border border-gray-200"
             />
             <div>
-              <p className="text-sm font-semibold">{other.name}</p>
-              <p className="text-xs text-muted-foreground">@{other.username}</p>
+              <p className="text-sm font-semibold text-gray-900">{other.display_name}</p>
+              <p className="text-xs text-gray-500">@{other.username}</p>
             </div>
           </>
         )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 space-y-3">
-        {conv.messages.map((m) => {
-          const mine = m.senderId === currentUserId;
+        {messages.map((m) => {
+          const mine = m.sender_id === currentUserId;
           return (
             <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
               <div
                 className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm ${
-                  mine
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-[var(--card-alt)] text-foreground"
+                  mine ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-900"
                 }`}
               >
                 {m.content}
-                <p
-                  className={`text-[10px] mt-1 ${
-                    mine ? "text-primary-foreground/70" : "text-muted-foreground"
-                  }`}
-                >
-                  {timeAgo(m.createdAt)}
+                <p className={`text-[10px] mt-1 ${mine ? "text-blue-100" : "text-gray-500"}`}>
+                  {timeAgo(m.created_at)}
                 </p>
               </div>
             </div>
           );
         })}
-        {conv.messages.length === 0 && (
-          <p className="text-center text-sm text-muted-foreground py-10">
+        {messages.length === 0 && (
+          <p className="text-center text-sm text-gray-500 py-10">
             Say hello to start the conversation.
           </p>
         )}
         <div ref={bottomRef} />
       </div>
 
-      <div className="flex gap-2 px-4 md:px-6 py-3 border-t border-border">
+      <div className="flex gap-2 px-4 md:px-6 py-3 border-t border-gray-200">
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
           placeholder="Message..."
-          className="flex-1 rounded-full bg-input border border-border px-4 py-2.5 text-sm outline-none focus:border-primary transition-colors"
+          className="flex-1 rounded-full bg-gray-50 border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
         />
         <button
           type="button"
           onClick={handleSend}
           disabled={!text.trim()}
-          className="h-10 w-10 rounded-full bg-primary text-primary-foreground shadow-[0_0_12px_var(--primary-glow)] flex items-center justify-center hover-elevate disabled:opacity-40 disabled:pointer-events-none"
+          className="h-10 w-10 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 disabled:opacity-40"
         >
           <Send className="h-4 w-4" />
         </button>
