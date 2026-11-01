@@ -1,68 +1,66 @@
-# Skillect Mobile (Expo)
+# Skillect Mobile — Amazon Appstore first
 
-React Native / Expo app that connects to the **same Supabase backend** as the web app.
+Android app using the **same Supabase backend** as the web app.
 
-## Prerequisites
+**Store order:** Amazon Appstore first → Google Play later
 
-- Node.js 20+
-- Expo CLI (`npx expo`)
-- Android Studio / Xcode for device builds
+---
 
-## Quick start
+## Identity
+
+| Field | Value |
+|-------|--------|
+| App name | Skillect |
+| Application ID | `com.skillect.app` |
+| Version | `1.0.0` |
+| Version code | `1` |
+
+---
+
+## Setup
 
 ```bash
 cd mobile
-npx create-expo-app@latest . --template blank-typescript
-npm install @supabase/supabase-js @react-native-async-storage/async-storage react-native-url-polyfill
-```
+npm install
 
-Create `mobile/.env`:
-
-```
+# .env
+cat > .env << 'EOF'
 EXPO_PUBLIC_SUPABASE_URL=https://chohswyxsckpwyzlbzav.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
-```
+EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNob2hzd3l4c2NrcHd5emxiemF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM0MzU0NDIsImV4cCI6MjEwOTAxMTQ0Mn0.DLuDDy5khFJUsYnixHfy6sdJoNB00EUk68pRWnnFRVA
+EOF
 
-## Core files to add
-
-### `lib/supabase.ts`
-
-```ts
-import "react-native-url-polyfill/auto";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createClient } from "@supabase/supabase-js";
-
-export const supabase = createClient(
-  process.env.EXPO_PUBLIC_SUPABASE_URL!,
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
-  {
-    auth: {
-      storage: AsyncStorage,
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: false,
-    },
-  }
-);
-```
-
-Auth, feed, create post, profile, and follow use the **same tables** as web:
-`profiles`, `posts`, `post_likes`, `comments`, `follows`.
-
-## Run
-
-```bash
 npx expo start
 ```
 
-## Build for stores
+## Build APK for Amazon
 
 ```bash
-# Android AAB
-npx eas build --platform android --profile production
-
-# iOS
-npx eas build --platform ios --profile production
+npm install -g eas-cli
+eas login
+eas init
+eas build --platform android --profile amazon
 ```
 
-See `/docs/STORE_PREP.md` for listing requirements.
+Download the APK → upload at [developer.amazon.com](https://developer.amazon.com).
+
+**Full guide:** [`docs/AMAZON_APPSTORE.md`](../docs/AMAZON_APPSTORE.md)  
+**Privacy policy template:** [`docs/PRIVACY_POLICY_TEMPLATE.md`](../docs/PRIVACY_POLICY_TEMPLATE.md)
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `App.tsx` | Email auth + feed (Supabase) |
+| `lib/supabase.ts` | Client |
+| `app.json` | Package / icons / version |
+| `eas.json` | `amazon` profile → APK |
+
+## Assets to add
+
+`mobile/assets/icon.png`, `adaptive-icon.png`, `splash.png`
+
+## Google Play (later)
+
+```bash
+eas build --platform android --profile production   # AAB
+```
