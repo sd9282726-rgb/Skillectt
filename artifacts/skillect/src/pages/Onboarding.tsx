@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApp } from "@/context/AppContext";
+import { Button } from "@/components/ui/button";
 
 const SUGGESTED_SKILLS = [
   "React",
@@ -9,16 +10,18 @@ const SUGGESTED_SKILLS = [
   "Figma",
   "UI/UX",
   "Python",
-  "Robotics",
-  "IoT",
+  "Design",
   "Marketing",
   "Product",
+  "Writing",
+  "Video",
+  "Entrepreneurship",
 ];
 
 export default function Onboarding() {
   const { profile, completeOnboarding } = useApp();
   const [, setLocation] = useLocation();
-  const [name, setName] = useState(profile?.name ?? "");
+  const [displayName, setDisplayName] = useState(profile?.display_name ?? "");
   const [bio, setBio] = useState("");
   const [location, setLocation2] = useState("");
   const [skills, setSkills] = useState<string[]>([]);
@@ -26,14 +29,20 @@ export default function Onboarding() {
 
   const toggleSkill = (skill: string) => {
     setSkills((prev) =>
-      prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill],
+      prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill]
     );
   };
 
   const handleSubmit = async () => {
+    if (!displayName.trim()) return;
     setSubmitting(true);
     try {
-      await completeOnboarding({ name, bio, location, skills });
+      await completeOnboarding({
+        display_name: displayName.trim(),
+        bio,
+        location,
+        skills,
+      });
       setLocation("/");
     } finally {
       setSubmitting(false);
@@ -41,48 +50,47 @@ export default function Onboarding() {
   };
 
   return (
-    <div className="min-h-[100dvh] w-full bg-background flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-8">
+    <div className="min-h-[100dvh] w-full bg-white flex items-center justify-center px-4 py-10">
+      <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
         <div className="flex items-center gap-2 mb-6">
-          <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="Skillect" className="h-8 w-8" />
-          <span className="text-lg font-bold neon-text">Welcome to Skillect</span>
+          <span className="text-lg font-bold text-blue-600">Welcome to Skillect</span>
         </div>
-        <h1 className="text-2xl font-bold mb-1">Set up your profile</h1>
-        <p className="text-sm text-muted-foreground mb-6">
-          Tell the community a bit about what you do.
+        <h1 className="text-2xl font-bold mb-1 text-gray-900">Set up your profile</h1>
+        <p className="text-sm text-gray-600 mb-6">
+          Tell the community what you're learning and building.
         </p>
 
         <div className="space-y-5">
           <div>
-            <label className="text-sm font-medium mb-1.5 block">Display name</label>
+            <label className="text-sm font-medium mb-1.5 block text-gray-700">Display name</label>
             <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
               placeholder="Your name"
-              className="w-full rounded-xl bg-input border border-border px-4 py-2.5 text-sm outline-none focus:border-primary transition-colors"
+              className="w-full rounded-xl bg-gray-50 border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
             />
           </div>
           <div>
-            <label className="text-sm font-medium mb-1.5 block">Bio</label>
+            <label className="text-sm font-medium mb-1.5 block text-gray-700">Bio</label>
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              placeholder="What are you building?"
+              placeholder="What are you learning or building?"
               rows={3}
-              className="w-full rounded-xl bg-input border border-border px-4 py-2.5 text-sm outline-none focus:border-primary transition-colors resize-none"
+              className="w-full rounded-xl bg-gray-50 border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500 resize-none"
             />
           </div>
           <div>
-            <label className="text-sm font-medium mb-1.5 block">Location</label>
+            <label className="text-sm font-medium mb-1.5 block text-gray-700">Location</label>
             <input
               value={location}
               onChange={(e) => setLocation2(e.target.value)}
               placeholder="City, Country"
-              className="w-full rounded-xl bg-input border border-border px-4 py-2.5 text-sm outline-none focus:border-primary transition-colors"
+              className="w-full rounded-xl bg-gray-50 border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
             />
           </div>
           <div>
-            <label className="text-sm font-medium mb-2 block">Skills</label>
+            <label className="text-sm font-medium mb-2 block text-gray-700">Skills & interests</label>
             <div className="flex flex-wrap gap-2">
               {SUGGESTED_SKILLS.map((skill) => {
                 const active = skills.includes(skill);
@@ -93,8 +101,8 @@ export default function Onboarding() {
                     onClick={() => toggleSkill(skill)}
                     className={`rounded-full px-3.5 py-1.5 text-xs font-medium border transition-colors ${
                       active
-                        ? "bg-[var(--primary-dim)] border-primary text-primary"
-                        : "border-border text-muted-foreground hover-elevate"
+                        ? "bg-blue-50 border-blue-500 text-blue-700"
+                        : "border-gray-200 text-gray-600 hover:bg-gray-50"
                     }`}
                   >
                     {skill}
@@ -105,14 +113,14 @@ export default function Onboarding() {
           </div>
         </div>
 
-        <button
+        <Button
           type="button"
           onClick={handleSubmit}
-          disabled={!name || submitting}
-          className="w-full mt-8 rounded-full py-3 text-sm font-semibold bg-primary text-primary-foreground shadow-[0_0_18px_var(--primary-glow)] hover-elevate disabled:opacity-40 disabled:pointer-events-none"
+          disabled={!displayName.trim() || submitting}
+          className="w-full mt-8 rounded-full py-3 h-11 text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"
         >
-          Enter Skillect
-        </button>
+          {submitting ? "Saving…" : "Enter Skillect"}
+        </Button>
       </div>
     </div>
   );
