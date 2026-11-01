@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useLocation } from "wouter";
-import { Image as ImageIcon, X } from "lucide-react";
+import { X, Upload } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -21,24 +21,55 @@ const CATEGORIES = [
   "Motivation and Experiences",
 ];
 
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+
 export default function Create() {
   const { profile } = useApp();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [content, setContent] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
-  const [image, setImage] = useState("");
   const [category, setCategory] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const addTag = () => {
     const clean = tagInput.trim().replace(/^#/, "");
-    if (clean && !tags.includes(clean)) {
-      setTags([...tags, clean]);
-    }
+    if (clean && !tags.includes(clean)) setTags([...tags, clean]);
     setTagInput("");
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (!selected) return;
+
+    if (selected.size > MAX_FILE_SIZE) {
+      setError("File must be under 50MB");
+      return;
+    }
+
+    const isImage = selected.type.startsWith("image/");
+    const isVideo = selected.type.startsWith("video/");
+    if (!isImage && !isVideo) {
+      setError("Only images and videos are allowed");
+      return;
+    }
+
+    setError(null);
+    setFile(selected);
+    setPreviewUrl(URL.createObjectURL(selected));
+  };
+
+  const clearFile = () => {
+    setFile(null);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleSubmit = async () => {
@@ -46,21 +77,44 @@ export default function Create() {
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase.from("posts").insert({
-      author_id: user.id,
-      content: content.trim(),
-      tags,
-      image_url: image.trim() || null,
-      category: category || null,
-    });
+    let mediaUrl: string | null = null;
 
-    if (error) {
-      setError(error.message);
+    try {
+      if (file) {
+        const ext = file.name.split(".").pop() || "bin";
+        const path = `${user.id}/${Date.now()}.${ext}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("post-media")
+          .upload(path, file, {
+            cacheControl: "3600",
+            upsert: false,
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: publicData } = supabase.storage
+          .from("post-media")
+          .getPublicUrl(path);
+
+        mediaUrl = publicData.publicUrl;
+      }
+
+      const { error: insertError } = await supabase.from("posts").insert({
+        author_id: user.id,
+        content: content.trim(),
+        tags,
+        image_url: mediaUrl,
+        category: category || null,
+      });
+
+      if (insertError) throw insertError;
+
+      setLocation("/");
+    } catch (err: any) {
+      setError(err.message || "Failed to create post");
       setLoading(false);
-      return;
     }
-
-    setLocation("/");
   };
 
   return (
@@ -76,7 +130,10 @@ export default function Create() {
       <div className="flex items-start gap-3 mb-4">
         {profile && (
           <img
-            src={profile.avatar_url || "https://api.dicebear.com/7.x/avataaars/svg?seed=" + profile.username}
+            src={
+              profile.avatar_url ||
+              `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`
+            }
             alt={profile.display_name}
             className="h-11 w-11 rounded-full object-cover border border-gray-200"
           />
@@ -107,14 +164,43 @@ export default function Create() {
       </div>
 
       <div className="mb-4">
-        <label className="text-sm font-medium mb-1.5 flex items-center gap-1.5 text-gray-700">
-          <ImageIcon className="h-4 w-4" /> Image URL (optional)
+        <label className="text-sm font-medium mb-1.5 block text-gray-700">
+          Image or Video (optional)
         </label>
+
+        {!previewUrl ? (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 py-8 text-sm text-gray-500 hover:border-blue-400 hover:bg-blue-50 transition-colors"
+          >
+            <Upload className="h-6 w-6" />
+            <span>Click to upload image or video</span>
+            <span className="text-xs text-gray-400">Max 50MB</span>
+          </button>
+        ) : (
+          <div className="relative rounded-xl overflow-hidden border border-gray-200">
+            {file?.type.startsWith("video/") ? (
+              <video src={previewUrl} controls className="w-full max-h-80 object-contain bg-black" />
+            ) : (
+              <img src={previewUrl} alt="Preview" className="w-full max-h-80 object-cover" />
+            )}
+            <button
+              type="button"
+              onClick={clearFile}
+              className="absolute top-2 right-2 h-8 w-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
         <input
-          value={image}
-          onChange={(e) => setImage(e.target.value)}
-          placeholder="https://..."
-          className="w-full rounded-xl bg-gray-50 border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*"
+          onChange={handleFileChange}
+          className="hidden"
         />
       </div>
 
