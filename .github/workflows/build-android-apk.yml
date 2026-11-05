@@ -67,7 +67,7 @@ jobs:
           cd mobile
           npx expo prebuild --platform android
 
-      - name: Configure Gradle (Kotlin 1.9.25)
+      - name: Configure Gradle + fix Kotlin/Compose
         run: |
           echo "sdk.dir=$ANDROID_HOME" > mobile/android/local.properties
           cat >> mobile/android/gradle.properties << 'EOF'
@@ -78,18 +78,7 @@ jobs:
           android.kotlinVersion=1.9.25
           android.suppressKotlinVersionCompatibilityCheck=true
           EOF
-          # Force kotlin version string everywhere in root build.gradle
-          python3 << 'PY'
-          from pathlib import Path
-          p = Path("mobile/android/build.gradle")
-          if p.exists():
-              t = p.read_text()
-              t = t.replace("1.9.24", "1.9.25")
-              t = t.replace("'1.9.23'", "'1.9.25'")
-              p.write_text(t)
-              print("patched build.gradle")
-              print([line for line in t.splitlines() if "kotlin" in line.lower()][:15])
-          PY
+          python3 mobile/scripts/fix-kotlin-compose.py
 
       - name: Build release APK
         run: |
