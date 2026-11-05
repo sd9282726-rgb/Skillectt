@@ -11,6 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
+    env:
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,8 +30,17 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Install Android SDK (manual)
+        run: |
+          mkdir -p $ANDROID_HOME/cmdline-tools
+          curl -fsSL -o /tmp/cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q /tmp/cmdtools.zip -d $ANDROID_HOME/cmdline-tools
+          mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
 
       - name: Install JS deps
         run: |
@@ -52,7 +65,7 @@ jobs:
             echo "$KEYSTORE_BASE64" | base64 -d > mobile/skillect-release.jks
             echo "Keystore decoded"
           else
-            echo "No KEYSTORE_BASE64 — release may use debug signing"
+            echo "No KEYSTORE_BASE64 secret"
           fi
 
       - name: Configure Gradle
@@ -67,21 +80,13 @@ jobs:
           newArchEnabled=false
           hermesEnabled=true
           EOF
-
           PASS="${KEYSTORE_PASSWORD:-SkillectRelease2026!}"
           ALIAS="${KEY_ALIAS:-skillect}"
           KPASS="${KEY_PASSWORD:-$PASS}"
           KS="$(pwd)/mobile/skillect-release.jks"
-
           if [ -f "$KS" ]; then
-            cat > mobile/android/keystore.properties << EOF
-          storeFile=$KS
-          storePassword=$PASS
-          keyAlias=$ALIAS
-          keyPassword=$KPASS
-          EOF
-            echo "keystore.properties written"
-            sed -i 's/signingConfig signingConfigs.debug/signingConfig signingConfigs.release/g' mobile/android/app/build.gradle || true
+            echo "Keystore present at $KS"
+            sed -i "s|signingConfig signingConfigs.debug|signingConfig signingConfigs.release|g" mobile/android/app/build.gradle || true
           fi
 
       - name: Build release APK
