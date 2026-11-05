@@ -29,6 +29,12 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'tools platform-tools platforms;android-35 build-tools;35.0.0'
+
+      - name: Accept licenses
+        run: |
+          yes | sdkmanager --licenses || true
 
       - name: Install npm packages
         working-directory: mobile
@@ -38,7 +44,7 @@ jobs:
 
       - name: Prebuild Android project
         working-directory: mobile
-        run: npx expo prebuild --platform android --non-interactive || npx expo prebuild --platform android
+        run: npx expo prebuild --platform android --non-interactive
 
       - name: local.properties
         working-directory: mobile
@@ -62,7 +68,7 @@ jobs:
           KA: ${{ secrets.KEY_ALIAS }}
           KPASS: ${{ secrets.KEY_PASSWORD }}
         run: |
-          cat > android/gradle.properties << EOF
+          cat > android/gradle.properties << 'EOF'
           org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8
           android.useAndroidX=true
           newArchEnabled=false
@@ -72,27 +78,29 @@ jobs:
           ALIAS="${KA:-skillect}"
           KPASSW="${KPASS:-$PASS}"
           if [ -f skillect-release.jks ]; then
-            python3 << PY
+            KS_PATH="$(pwd)/skillect-release.jks"
+            python3 - "$KS_PATH" "$PASS" "$ALIAS" "$KPASSW" << 'PY'
+          import sys
           from pathlib import Path
+          ks, pwd, alias, kpwd = sys.argv[1:5]
           p = Path("android/app/build.gradle")
           t = p.read_text()
-          block = '''
-              signingConfigs {
-                  release {
-                      storeFile file("/home/runner/work/Skillectt/Skillectt/mobile/skillect-release.jks")
-                      storePassword "%s"
-                      keyAlias "%s"
-                      keyPassword "%s"
-                  }
-              }
-          ''' %% ("$PASS", "$ALIAS", "$KPASSW")
-          if "signingConfigs" in t and "storeFile file(\"/home/runner/work" not in t:
-              t = t.replace("signingConfigs {", "signingConfigs {\n        release {\n            storeFile file(\"/home/runner/work/Skillectt/Skillectt/mobile/skillect-release.jks\")\n            storePassword \"%s\"\n            keyAlias \"%s\"\n            keyPassword \"%s\"\n        }" %% ("$PASS", "$ALIAS", "$KPASSW"), 1)
+          if f'storeFile file("{ks}")' not in t:
+              insert = f'''
+        release {{
+            storeFile file("{ks}")
+            storePassword "{pwd}"
+            keyAlias "{alias}"
+            keyPassword "{kpwd}"
+        }}
+'''
+              if "signingConfigs {" in t:
+                  t = t.replace("signingConfigs {", "signingConfigs {" + insert, 1)
               t = t.replace("signingConfig signingConfigs.debug", "signingConfig signingConfigs.release")
               p.write_text(t)
               print("signing patched")
           else:
-              print("signing left as-is")
+              print("signing already set")
           PY
           fi
 
