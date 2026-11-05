@@ -67,28 +67,29 @@ jobs:
           cd mobile
           npx expo prebuild --platform android
 
-      - name: Fix Kotlin version + local.properties
+      - name: Configure Gradle (Kotlin 1.9.25)
         run: |
           echo "sdk.dir=$ANDROID_HOME" > mobile/android/local.properties
-          cat > mobile/android/gradle.properties << EOF
+          cat >> mobile/android/gradle.properties << 'EOF'
           org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8
           android.useAndroidX=true
           newArchEnabled=false
           hermesEnabled=true
+          android.kotlinVersion=1.9.25
           android.suppressKotlinVersionCompatibilityCheck=true
-          kotlin.version=1.9.25
           EOF
-          # Force Kotlin 1.9.25 in root build.gradle if present
-          if [ -f mobile/android/build.gradle ]; then
-            sed -i 's/kotlinVersion\s*=.*/kotlinVersion = "1.9.25"/' mobile/android/build.gradle || true
-            sed -i "s/ext.kotlin_version.*/ext.kotlin_version = '1.9.25'/" mobile/android/build.gradle || true
-            if ! grep -q "kotlinVersion" mobile/android/build.gradle; then
-              sed -i '/buildscript/a\    ext.kotlinVersion = "1.9.25"' mobile/android/build.gradle || true
-            fi
-          fi
-          # Also patch settings/libs if expo uses version catalog
-          find mobile/android -name "*.gradle*" -o -name "libs.versions.toml" 2>/dev/null | head -20
-          grep -r "1.9.24\|kotlinVersion\|kotlin_version" mobile/android --include="*.gradle*" --include="*.toml" 2>/dev/null | head -20 || true
+          # Force kotlin version string everywhere in root build.gradle
+          python3 << 'PY'
+          from pathlib import Path
+          p = Path("mobile/android/build.gradle")
+          if p.exists():
+              t = p.read_text()
+              t = t.replace("1.9.24", "1.9.25")
+              t = t.replace("'1.9.23'", "'1.9.25'")
+              p.write_text(t)
+              print("patched build.gradle")
+              print([line for line in t.splitlines() if "kotlin" in line.lower()][:15])
+          PY
 
       - name: Build release APK
         run: |
@@ -109,6 +110,7 @@ jobs:
           mkdir -p dist
           SRC=$(find mobile/android/app/build/outputs/apk -name '*.apk' | head -1)
           echo "Source APK: $SRC"
+          test -n "$SRC"
           cp "$SRC" dist/skillect-unsigned.apk
 
           if [ -n "$KEYSTORE_BASE64" ]; then
@@ -122,10 +124,8 @@ jobs:
               --out dist/Skillect-1.0.2-release.apk \
               dist/skillect-aligned.apk
             $ANDROID_HOME/build-tools/35.0.0/apksigner verify dist/Skillect-1.0.2-release.apk
-            echo "Signed APK ready"
           else
             cp dist/skillect-unsigned.apk dist/Skillect-1.0.2-release.apk
-            echo "WARNING: no keystore secret"
           fi
           ls -lh dist/
 
