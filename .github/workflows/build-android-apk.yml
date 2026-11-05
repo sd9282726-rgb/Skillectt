@@ -31,7 +31,7 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Install Android SDK (manual)
+      - name: Install Android SDK
         run: |
           mkdir -p $ANDROID_HOME/cmdline-tools
           curl -fsSL -o /tmp/cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
@@ -49,34 +49,26 @@ jobs:
         run: |
           cd mobile
           mkdir -p assets
-          python3 << 'PY'
-          import struct, zlib
+          python3 -c "
+          import struct,zlib
           from pathlib import Path
-          def png(w, h, rgb=(37, 99, 235)):
-              def chunk(t, d):
-                  return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
-              raw = b"".join(b"\x00" + bytes(rgb) * w for _ in range(h))
-              return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
-          for name in ["icon.png", "adaptive-icon.png", "splash.png", "favicon.png"]:
-              Path("assets", name).write_bytes(png(1024, 1024))
-          print("assets ready")
-          PY
+          def png(w,h,rgb=(37,99,235)):
+            def chunk(t,d): return struct.pack('>I',len(d))+t+d+struct.pack('>I',zlib.crc32(t+d)&0xffffffff)
+            raw=b''.join(b'\x00'+bytes(rgb)*w for _ in range(h))
+            return b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',w,h,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(raw))+chunk(b'IEND',b'')
+          for n in ['icon.png','adaptive-icon.png','splash.png','favicon.png']:
+            Path('assets',n).write_bytes(png(1024,1024))
+          print('assets ok')
+          "
 
       - name: Expo prebuild
         run: |
           cd mobile
           npx expo prebuild --platform android
 
-      - name: Write local.properties
-        run: echo "sdk.dir=$ANDROID_HOME" > mobile/android/local.properties
-
-      - name: Decode keystore + patch signing
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      - name: local.properties + gradle memory
         run: |
+          echo "sdk.dir=$ANDROID_HOME" > mobile/android/local.properties
           cat > mobile/android/gradle.properties << EOF
           org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8
           android.useAndroidX=true
@@ -84,60 +76,22 @@ jobs:
           hermesEnabled=true
           EOF
 
+      - name: Decode keystore and patch signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
           PASS="${KEYSTORE_PASSWORD:-SkillectRelease2026!}"
           ALIAS="${KEY_ALIAS:-skillect}"
           KPASS="${KEY_PASSWORD:-$PASS}"
-
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > mobile/skillect-release.jks
             KS="$(pwd)/mobile/skillect-release.jks"
-            echo "Keystore at $KS"
-
-            python3 - "$KS" "$PASS" "$ALIAS" "$KPASS" << 'PY'
-          import sys
-          from pathlib import Path
-          ks, pwd, alias, kpwd = sys.argv[1:5]
-          p = Path("mobile/android/app/build.gradle")
-          t = p.read_text()
-
-          # Add release signingConfigs if missing
-          release_cfg = f'''
-        release {{
-            storeFile file("{ks}")
-            storePassword "{pwd}"
-            keyAlias "{alias}"
-            keyPassword "{kpwd}"
-        }}
-'''
-          if "keyAlias" not in t:
-              if "signingConfigs {" in t:
-                  t = t.replace("signingConfigs {", "signingConfigs {" + release_cfg, 1)
-              else:
-                  # inject before buildTypes
-                  t = t.replace(
-                      "buildTypes {",
-                      "signingConfigs {\n" + release_cfg + "    }\n    buildTypes {",
-                      1,
-                  )
-
-          # Point release buildType to release signing
-          t = t.replace(
-              "signingConfig signingConfigs.debug",
-              "signingConfig signingConfigs.release",
-          )
-          # common expo pattern: only debug has signingConfig; ensure release uses it
-          if "release {" in t and "signingConfig signingConfigs.release" not in t.split("release {")[1][:400]:
-              t = t.replace(
-                  "release {",
-                  "release {\n            signingConfig signingConfigs.release",
-                  1,
-              )
-
-          p.write_text(t)
-          print("signing patched")
-          PY
+            python3 mobile/scripts/patch-signing.py "$KS" "$PASS" "$ALIAS" "$KPASS"
           else
-            echo "No keystore secret — using default debug signing"
+            echo "No KEYSTORE_BASE64 secret"
           fi
 
       - name: Build release APK
