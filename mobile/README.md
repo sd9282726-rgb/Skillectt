@@ -1,66 +1,54 @@
-# Skillect Mobile — Amazon Appstore first
+# Skillect Mobile — Native (Expo / React Native)
 
-Android app using the **same Supabase backend** as the web app.
+**Not a WebView.** This is a real React Native app with native screens, navigation, image picker, and Supabase.
 
-**Store order:** Amazon Appstore first → Google Play later
+## Features in the app
 
----
+- Email sign up / sign in (verified accounts)
+- Premium white + blue UI
+- **Feed** — posts, media, categories, pull-to-refresh
+- **Like** posts
+- **Create** — text + category + image upload to Supabase Storage
+- **Explore** — search people, follow
+- **Profile** — edit display name, username, bio, sign out
 
-## Identity
+Package: `com.skillect.app` · Version `1.0.2` · versionCode `3`
 
-| Field | Value |
-|-------|--------|
-| App name | Skillect |
-| Application ID | `com.skillect.app` |
-| Version | `1.0.0` |
-| Version code | `1` |
-
----
-
-## Setup
+## Run locally
 
 ```bash
 cd mobile
 npm install
-
-# .env
-cat > .env << 'EOF'
-EXPO_PUBLIC_SUPABASE_URL=https://chohswyxsckpwyzlbzav.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNob2hzd3l4c2NrcHd5emxiemF2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM0MzU0NDIsImV4cCI6MjEwOTAxMTQ0Mn0.DLuDDy5khFJUsYnixHfy6sdJoNB00EUk68pRWnnFRVA
-EOF
-
 npx expo start
 ```
 
-## Build APK for Amazon
+## Build store APK (required for Amazon / Indus)
+
+This environment cannot produce a full 80MB+ native release binary. Use **EAS Build** on your machine or CI:
 
 ```bash
 npm install -g eas-cli
+cd mobile
 eas login
 eas init
 eas build --platform android --profile amazon
 ```
 
-Download the APK → upload at [developer.amazon.com](https://developer.amazon.com).
+`eas.json` already has an `amazon` profile (APK).
 
-**Full guide:** [`docs/AMAZON_APPSTORE.md`](../docs/AMAZON_APPSTORE.md)  
-**Privacy policy template:** [`docs/PRIVACY_POLICY_TEMPLATE.md`](../docs/PRIVACY_POLICY_TEMPLATE.md)
+Typical release size is often **30–70MB** depending on assets; 80–90MB is possible with more images/fonts/native modules, not by wrapping a website.
 
-## Files
+## Amazon testing instructions (paste in Binary tab)
 
-| File | Purpose |
-|------|---------|
-| `App.tsx` | Email auth + feed (Supabase) |
-| `lib/supabase.ts` | Client |
-| `app.json` | Package / icons / version |
-| `eas.json` | `amazon` profile → APK |
-
-## Assets to add
-
-`mobile/assets/icon.png`, `adaptive-icon.png`, `splash.png`
-
-## Google Play (later)
-
-```bash
-eas build --platform android --profile production   # AAB
 ```
+Test account:
+Email: [create a real confirmed test user in Supabase Auth]
+Password: [that user's password]
+
+Steps:
+1. Install and open Skillect
+2. Sign in with the test email/password above
+3. Browse Feed, open Create, Explore, Profile
+```
+
+You must create a **confirmed** Supabase user first (email confirmation required).
