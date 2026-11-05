@@ -1,54 +1,27 @@
 # Skillect Mobile — Native (Expo / React Native)
 
-**Not a WebView.** This is a real React Native app with native screens, navigation, image picker, and Supabase.
+**Not a WebView.** Native screens + Supabase.
 
-## Features in the app
+Package: `com.skillect.app` · Version `1.0.2` · versionCode `3` · minSdk 24
 
-- Email sign up / sign in (verified accounts)
-- Premium white + blue UI
-- **Feed** — posts, media, categories, pull-to-refresh
-- **Like** posts
-- **Create** — text + category + image upload to Supabase Storage
-- **Explore** — search people, follow
-- **Profile** — edit display name, username, bio, sign out
+## No PC — build APK in the cloud
 
-Package: `com.skillect.app` · Version `1.0.2` · versionCode `3`
+See **[BUILD_NO_PC.md](./BUILD_NO_PC.md)**
 
-## Run locally
+1. Add Actions secrets: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`
+2. Open Actions → **Build Skillect Android APK** → Run workflow (or push to `mobile/`)
+3. Download artifact **Skillect-release-apk**
 
-```bash
-cd mobile
-npm install
-npx expo start
-```
+## Features
 
-## Build store APK (required for Amazon / Indus)
+- Email auth, Feed, Like, Create + image, Explore, Profile
 
-This environment cannot produce a full 80MB+ native release binary. Use **EAS Build** on your machine or CI:
-
-```bash
-npm install -g eas-cli
-cd mobile
-eas login
-eas init
-eas build --platform android --profile amazon
-```
-
-`eas.json` already has an `amazon` profile (APK).
-
-Typical release size is often **30–70MB** depending on assets; 80–90MB is possible with more images/fonts/native modules, not by wrapping a website.
-
-## Amazon testing instructions (paste in Binary tab)
+## Amazon testing instructions
 
 ```
 Test account:
-Email: [create a real confirmed test user in Supabase Auth]
-Password: [that user's password]
+Email: [confirmed Supabase user]
+Password: [password]
 
-Steps:
-1. Install and open Skillect
-2. Sign in with the test email/password above
-3. Browse Feed, open Create, Explore, Profile
+Steps: Install → Sign in → Feed → Create → Explore → Profile
 ```
-
-You must create a **confirmed** Supabase user first (email confirmation required).
