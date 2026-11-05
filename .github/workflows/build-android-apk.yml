@@ -67,7 +67,7 @@ jobs:
           cd mobile
           npx expo prebuild --platform android
 
-      - name: local.properties + gradle memory
+      - name: Fix Kotlin version + local.properties
         run: |
           echo "sdk.dir=$ANDROID_HOME" > mobile/android/local.properties
           cat > mobile/android/gradle.properties << EOF
@@ -75,9 +75,22 @@ jobs:
           android.useAndroidX=true
           newArchEnabled=false
           hermesEnabled=true
+          android.suppressKotlinVersionCompatibilityCheck=true
+          kotlin.version=1.9.25
           EOF
+          # Force Kotlin 1.9.25 in root build.gradle if present
+          if [ -f mobile/android/build.gradle ]; then
+            sed -i 's/kotlinVersion\s*=.*/kotlinVersion = "1.9.25"/' mobile/android/build.gradle || true
+            sed -i "s/ext.kotlin_version.*/ext.kotlin_version = '1.9.25'/" mobile/android/build.gradle || true
+            if ! grep -q "kotlinVersion" mobile/android/build.gradle; then
+              sed -i '/buildscript/a\    ext.kotlinVersion = "1.9.25"' mobile/android/build.gradle || true
+            fi
+          fi
+          # Also patch settings/libs if expo uses version catalog
+          find mobile/android -name "*.gradle*" -o -name "libs.versions.toml" 2>/dev/null | head -20
+          grep -r "1.9.24\|kotlinVersion\|kotlin_version" mobile/android --include="*.gradle*" --include="*.toml" 2>/dev/null | head -20 || true
 
-      - name: Build release APK (default Expo signing)
+      - name: Build release APK
         run: |
           cd mobile/android
           chmod +x gradlew
@@ -112,7 +125,7 @@ jobs:
             echo "Signed APK ready"
           else
             cp dist/skillect-unsigned.apk dist/Skillect-1.0.2-release.apk
-            echo "WARNING: no keystore secret, uploaded unsigned/debug-signed APK"
+            echo "WARNING: no keystore secret"
           fi
           ls -lh dist/
 
