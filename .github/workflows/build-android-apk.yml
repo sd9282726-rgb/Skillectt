@@ -3,114 +3,94 @@ name: Build Skillect APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
-
-permissions:
-  contents: read
-  actions: write
+    branches:
+      - main
 
 jobs:
-  android:
-    name: Build release APK
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: 20
 
-      - uses: actions/setup-java@v4
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: 17
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: 'tools platform-tools platforms;android-35 build-tools;35.0.0'
 
-      - name: Accept licenses
+      - name: Install JS deps
         run: |
-          yes | sdkmanager --licenses || true
-
-      - name: Install npm packages
-        working-directory: mobile
-        run: |
+          cd mobile
           npm install
-          npm install expo-asset expo-constants --save || true
+          npm install expo-asset@~11.0.5 expo-constants --save
 
-      - name: Prebuild Android project
-        working-directory: mobile
-        run: npx expo prebuild --platform android --non-interactive
+      - name: Expo prebuild
+        run: |
+          cd mobile
+          npx expo prebuild --platform android --non-interactive
 
-      - name: local.properties
-        working-directory: mobile
-        run: echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+      - name: Write local.properties
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > mobile/android/local.properties
 
-      - name: Decode keystore from secret
+      - name: Decode keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > mobile/skillect-release.jks
-            echo "Keystore OK"
+            echo "Keystore decoded"
           else
-            echo "WARNING: KEYSTORE_BASE64 secret missing"
+            echo "No KEYSTORE_BASE64 — release may use debug signing"
           fi
 
-      - name: Gradle memory + signing
-        working-directory: mobile
+      - name: Configure Gradle
         env:
-          KP: ${{ secrets.KEYSTORE_PASSWORD }}
-          KA: ${{ secrets.KEY_ALIAS }}
-          KPASS: ${{ secrets.KEY_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          cat > android/gradle.properties << 'EOF'
+          cat > mobile/android/gradle.properties << EOF
           org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8
           android.useAndroidX=true
           newArchEnabled=false
           hermesEnabled=true
           EOF
-          PASS="${KP:-SkillectRelease2026!}"
-          ALIAS="${KA:-skillect}"
-          KPASSW="${KPASS:-$PASS}"
-          if [ -f skillect-release.jks ]; then
-            KS_PATH="$(pwd)/skillect-release.jks"
-            python3 - "$KS_PATH" "$PASS" "$ALIAS" "$KPASSW" << 'PY'
-          import sys
-          from pathlib import Path
-          ks, pwd, alias, kpwd = sys.argv[1:5]
-          p = Path("android/app/build.gradle")
-          t = p.read_text()
-          if f'storeFile file("{ks}")' not in t:
-              insert = f'''
-        release {{
-            storeFile file("{ks}")
-            storePassword "{pwd}"
-            keyAlias "{alias}"
-            keyPassword "{kpwd}"
-        }}
-'''
-              if "signingConfigs {" in t:
-                  t = t.replace("signingConfigs {", "signingConfigs {" + insert, 1)
-              t = t.replace("signingConfig signingConfigs.debug", "signingConfig signingConfigs.release")
-              p.write_text(t)
-              print("signing patched")
-          else:
-              print("signing already set")
-          PY
+
+          PASS="${KEYSTORE_PASSWORD:-SkillectRelease2026!}"
+          ALIAS="${KEY_ALIAS:-skillect}"
+          KPASS="${KEY_PASSWORD:-$PASS}"
+          KS="$(pwd)/mobile/skillect-release.jks"
+
+          if [ -f "$KS" ]; then
+            cat > mobile/android/keystore.properties << EOF
+          storeFile=$KS
+          storePassword=$PASS
+          keyAlias=$ALIAS
+          keyPassword=$KPASS
+          EOF
+            echo "keystore.properties written"
+            sed -i 's/signingConfig signingConfigs.debug/signingConfig signingConfigs.release/g' mobile/android/app/build.gradle || true
           fi
 
-      - name: Assemble release APK
-        working-directory: mobile/android
+      - name: Build release APK
         run: |
+          cd mobile/android
           chmod +x gradlew
-          ./gradlew :app:assembleRelease -x lint -x test --stacktrace
+          ./gradlew assembleRelease -x lint -x test --stacktrace
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Skillect-release-apk
