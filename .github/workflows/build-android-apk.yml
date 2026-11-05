@@ -14,6 +14,7 @@ jobs:
     env:
       ANDROID_HOME: ${{ github.workspace }}/android-sdk
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+      CI: "1"
 
     steps:
       - name: Checkout
@@ -36,11 +37,9 @@ jobs:
           curl -fsSL -o /tmp/cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           unzip -q /tmp/cmdtools.zip -d $ANDROID_HOME/cmdline-tools
           mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
-          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "platforms;android-35" "build-tools;35.0.0" || true
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
 
       - name: Install JS deps
         run: |
@@ -48,10 +47,27 @@ jobs:
           npm install
           npm install expo-asset@~11.0.5 expo-constants --save
 
+      - name: Create placeholder assets
+        run: |
+          cd mobile
+          mkdir -p assets
+          python3 << 'PY'
+          import struct, zlib
+          from pathlib import Path
+          def png(w, h, rgb=(37, 99, 235)):
+              def chunk(t, d):
+                  return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+              raw = b"".join(b"\x00" + bytes(rgb) * w for _ in range(h))
+              return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+          for name in ["icon.png", "adaptive-icon.png", "splash.png", "favicon.png"]:
+              Path("assets", name).write_bytes(png(1024, 1024))
+          print("assets ready")
+          PY
+
       - name: Expo prebuild
         run: |
           cd mobile
-          npx expo prebuild --platform android --non-interactive
+          npx expo prebuild --platform android
 
       - name: Write local.properties
         run: |
@@ -80,12 +96,7 @@ jobs:
           newArchEnabled=false
           hermesEnabled=true
           EOF
-          PASS="${KEYSTORE_PASSWORD:-SkillectRelease2026!}"
-          ALIAS="${KEY_ALIAS:-skillect}"
-          KPASS="${KEY_PASSWORD:-$PASS}"
-          KS="$(pwd)/mobile/skillect-release.jks"
-          if [ -f "$KS" ]; then
-            echo "Keystore present at $KS"
+          if [ -f mobile/skillect-release.jks ]; then
             sed -i "s|signingConfig signingConfigs.debug|signingConfig signingConfigs.release|g" mobile/android/app/build.gradle || true
           fi
 
