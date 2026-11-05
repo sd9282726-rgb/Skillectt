@@ -38,6 +38,7 @@ jobs:
           unzip -q /tmp/cmdtools.zip -d $ANDROID_HOME/cmdline-tools
           mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "platforms;android-35" "build-tools;35.0.0" || true
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> $GITHUB_PATH
 
       - name: Install JS deps
         run: |
@@ -76,7 +77,13 @@ jobs:
           hermesEnabled=true
           EOF
 
-      - name: Decode keystore and patch signing
+      - name: Build release APK (default Expo signing)
+        run: |
+          cd mobile/android
+          chmod +x gradlew
+          ./gradlew assembleRelease -x lint -x test --stacktrace
+
+      - name: Sign APK with release keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -86,23 +93,32 @@ jobs:
           PASS="${KEYSTORE_PASSWORD:-SkillectRelease2026!}"
           ALIAS="${KEY_ALIAS:-skillect}"
           KPASS="${KEY_PASSWORD:-$PASS}"
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > mobile/skillect-release.jks
-            KS="$(pwd)/mobile/skillect-release.jks"
-            python3 mobile/scripts/patch-signing.py "$KS" "$PASS" "$ALIAS" "$KPASS"
-          else
-            echo "No KEYSTORE_BASE64 secret"
-          fi
+          mkdir -p dist
+          SRC=$(find mobile/android/app/build/outputs/apk -name '*.apk' | head -1)
+          echo "Source APK: $SRC"
+          cp "$SRC" dist/skillect-unsigned.apk
 
-      - name: Build release APK
-        run: |
-          cd mobile/android
-          chmod +x gradlew
-          ./gradlew assembleRelease -x lint -x test --stacktrace
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > skillect-release.jks
+            $ANDROID_HOME/build-tools/35.0.0/zipalign -f -p 4 dist/skillect-unsigned.apk dist/skillect-aligned.apk
+            $ANDROID_HOME/build-tools/35.0.0/apksigner sign \
+              --ks skillect-release.jks \
+              --ks-key-alias "$ALIAS" \
+              --ks-pass pass:"$PASS" \
+              --key-pass pass:"$KPASS" \
+              --out dist/Skillect-1.0.2-release.apk \
+              dist/skillect-aligned.apk
+            $ANDROID_HOME/build-tools/35.0.0/apksigner verify dist/Skillect-1.0.2-release.apk
+            echo "Signed APK ready"
+          else
+            cp dist/skillect-unsigned.apk dist/Skillect-1.0.2-release.apk
+            echo "WARNING: no keystore secret, uploaded unsigned/debug-signed APK"
+          fi
+          ls -lh dist/
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Skillect-release-apk
-          path: mobile/android/app/build/outputs/apk/**/*.apk
+          path: dist/Skillect-1.0.2-release.apk
           if-no-files-found: error
