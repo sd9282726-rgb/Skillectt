@@ -2,7 +2,7 @@
   "expo": {
     "name": "Skillect",
     "slug": "skillect",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -11,7 +11,6 @@
       "resizeMode": "contain",
       "backgroundColor": "#FFFFFF"
     },
-    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.skillect.app"
@@ -19,38 +18,26 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#2563EB"
+        "backgroundColor": "#0F172A"
       },
       "package": "com.skillect.app",
-      "versionCode": 1,
+      "versionCode": 3,
       "permissions": [
         "INTERNET",
-        "ACCESS_NETWORK_STATE",
+        "CAMERA",
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
-      ],
-      "intentFilters": [
-        {
-          "action": "VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "https",
-              "host": "chohswyxsckpwyzlbzav.supabase.co"
-            }
-          ],
-          "category": ["BROWSABLE", "DEFAULT"]
-        }
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES"
       ]
     },
-    "scheme": "skillect",
-    "extra": {
-      "eas": {
-        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
-      }
-    },
     "plugins": [
-      "expo-secure-store"
-    ]
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Skillect to access photos for your posts."
+        }
+      ]
+    ],
+    "scheme": "skillect"
   }
 }
