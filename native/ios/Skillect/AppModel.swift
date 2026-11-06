@@ -229,7 +229,7 @@ final class AppModel: ObservableObject {
             let communityData = try await request(path: "/rest/v1/communities?select=id,name,description,member_count&order=created_at.desc&limit=100")
             communities = try JSONDecoder().decode([NativeCommunity].self, from: communityData)
             if let me = userId {
-                let memberData = try await request(path: "/rest/v1/community_members?select=community_id&user_id=eq.\\(me)")
+                let memberData = try await request(path: "/rest/v1/community_members?select=community_id&user_id=eq.\(me)")
                 let memberRows = try JSONSerialization.jsonObject(with: memberData) as? [[String: String]] ?? []
                 joinedCommunityIds = Set(memberRows.compactMap { $0["community_id"] })
             }
