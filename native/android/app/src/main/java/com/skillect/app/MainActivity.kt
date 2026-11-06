@@ -26,6 +26,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.URLEncoder
 
 private val Blue = Color(0xFF315CF5)
 private val Ink = Color(0xFF15213B)
@@ -33,7 +34,8 @@ private val client = OkHttpClient()
 private const val URL = BuildConfig.SUPABASE_URL
 private const val KEY = BuildConfig.SUPABASE_KEY
 
-data class Post(val id: String, val body: String, val author: String, val handle: String, val image: String?)
+data class Post(val id: String, val authorId: String, val body: String, val author: String, val handle: String, val image: String?, val likes: Int, val comments: Int)
+data class SimpleItem(val id: String, val title: String, val detail: String)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,110 +56,298 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSignOut: () -> Unit) {
     var token by remember { mutableStateOf(initialToken) }
+    var userId by remember { mutableStateOf<String?>(null) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var posts by remember { mutableStateOf<List<Post>>(emptyList()) }
+    var likedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var savedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var tab by remember { mutableStateOf("Feed") }
     var refresh by remember { mutableIntStateOf(0) }
+    var createText by remember { mutableStateOf("") }
+    var searchText by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
+    var projects by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
+    var communities by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
+    var displayName by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var bio by remember { mutableStateOf("") }
+    var showCommentsFor by remember { mutableStateOf<String?>(null) }
+    var comments by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
+    var commentText by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
-    suspend fun signIn() {
-        busy = true; error = null
+    suspend fun loadUser() {
+        val active = token ?: return
         try {
-            val json = JSONObject().put("email", email.trim()).put("password", password)
-            val response = api("POST", "/auth/v1/token?grant_type=password", null, json)
-            val newToken = response.getString("access_token")
-            token = newToken; onToken(newToken)
-        } catch (e: Exception) { error = e.message ?: "Sign in failed" }
-        busy = false
+            val u = api("GET", "/auth/v1/user", active)
+            userId = u.optString("id").takeIf { it.isNotBlank() }
+            val id = userId ?: return
+            val arr = apiArray("/rest/v1/profiles?select=display_name,username,bio&id=eq.$id&limit=1", active)
+            if (arr.length() > 0) {
+                val p = arr.getJSONObject(0)
+                displayName = p.optString("display_name")
+                username = p.optString("username")
+                bio = p.optString("bio")
+            }
+        } catch (e: Exception) { error = e.message }
+    }
+
+    suspend fun loadFeed() {
+        val active = token ?: return
+        try {
+            val arr = apiArray("/rest/v1/posts?select=id,author_id,content,image_url,likes_count,comments_count,profiles(display_name,username)&order=created_at.desc&limit=50", active)
+            posts = (0 until arr.length()).map { i ->
+                val p = arr.getJSONObject(i); val profile = p.optJSONObject("profiles") ?: JSONObject()
+                Post(p.optString("id"), p.optString("author_id"), p.optString("content"), profile.optString("display_name", "Skillect member"), profile.optString("username", "member"), p.optString("image_url").takeIf { it.isNotBlank() }, p.optInt("likes_count"), p.optInt("comments_count"))
+            }
+            val me = userId
+            if (me != null) {
+                val likes = apiArray("/rest/v1/post_likes?select=post_id&user_id=eq.$me", active)
+                likedIds = (0 until likes.length()).map { likes.getJSONObject(it).optString("post_id") }.toSet()
+                val saves = apiArray("/rest/v1/saved_posts?select=post_id&user_id=eq.$me", active)
+                savedIds = (0 until saves.length()).map { saves.getJSONObject(it).optString("post_id") }.toSet()
+            }
+        } catch (e: Exception) { error = e.message ?: "Could not load feed" }
+    }
+
+    suspend fun loadProjects() {
+        val active = token ?: return
+        try {
+            val arr = apiArray("/rest/v1/projects?select=id,title,description,status&order=created_at.desc&limit=40", active)
+            projects = (0 until arr.length()).map { val p=arr.getJSONObject(it); SimpleItem(p.optString("id"),p.optString("title"),p.optString("description")) }
+        } catch (e: Exception) { error=e.message }
+    }
+
+    suspend fun loadCommunities() {
+        val active = token ?: return
+        try {
+            val arr = apiArray("/rest/v1/communities?select=id,name,description,member_count&order=created_at.desc&limit=40", active)
+            communities = (0 until arr.length()).map { val p=arr.getJSONObject(it); SimpleItem(p.optString("id"),p.optString("name"),p.optString("description")) }
+        } catch (e: Exception) { error=e.message }
+    }
+
+    suspend fun searchPeople() {
+        val active=token ?: return
+        if (searchText.isBlank()) { results=emptyList(); return }
+        try {
+            val q=URLEncoder.encode(searchText.trim(), "UTF-8")
+            val arr=apiArray("/rest/v1/profiles?select=id,display_name,username,bio&or=(username.ilike.%25$q%25,display_name.ilike.%25$q%25)&limit=30",active)
+            results=(0 until arr.length()).map { val p=arr.getJSONObject(it); SimpleItem(p.optString("id"),p.optString("display_name")+"  @"+p.optString("username"),p.optString("bio")) }
+        } catch(e:Exception){ error=e.message }
     }
 
     LaunchedEffect(token, refresh) {
         if (token != null) {
-            try {
-                val arr = apiArray("/rest/v1/posts?select=id,content,image_url,profiles(display_name,username)&order=created_at.desc&limit=40", token!!)
-                posts = (0 until arr.length()).map { i ->
-                    val p = arr.getJSONObject(i); val profile = p.optJSONObject("profiles") ?: JSONObject()
-                    Post(p.optString("id"), p.optString("content"), profile.optString("display_name", "Skillect member"), profile.optString("username", "member"), p.optString("image_url").takeIf { it.isNotBlank() })
-                }
-            } catch (e: Exception) { error = e.message ?: "Could not load feed" }
+            loadUser()
+            loadFeed()
+            loadProjects()
+            loadCommunities()
         }
     }
 
-    if (token == null) {
-        Column(Modifier.fillMaxSize().background(Color.White).padding(horizontal = 28.dp), verticalArrangement = Arrangement.Center) {
-            Text("Skillect", color = Blue, fontSize = 34.sp, fontWeight = FontWeight.ExtraBold)
-            Text("Grow skills. Share progress. Build together.", color = Ink, modifier = Modifier.padding(top = 6.dp, bottom = 28.dp))
-            OutlinedTextField(email, { email = it }, label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(password, { password = it }, label = { Text("Password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), singleLine = true)
-            error?.let { Text(it, color = Color.Red, modifier = Modifier.padding(top = 10.dp)) }
-            Button(onClick = { scope.launch { signIn() } }, enabled = !busy && email.isNotBlank() && password.isNotBlank(), modifier = Modifier.fillMaxWidth().padding(top = 20.dp), shape = RoundedCornerShape(14.dp)) {
-                Text(if (busy) "Please wait…" else "Sign in")
+    suspend fun createPost() {
+        val active=token ?: return
+        val author=userId ?: return
+        if(createText.isBlank()) return
+        busy=true
+        try {
+            val body=JSONObject().put("author_id",author).put("content",createText.trim()).put("tags",JSONArray())
+            api("POST","/rest/v1/posts",active,body)
+            createText=""
+            tab="Feed"
+            loadFeed()
+            error=null
+        } catch(e:Exception){ error=e.message }
+        busy=false
+    }
+
+    suspend fun toggleLike(post:Post) {
+        val active=token ?: return
+        val me=userId ?: return
+        try {
+            if(likedIds.contains(post.id)) {
+                api("DELETE","/rest/v1/post_likes?post_id=eq.${post.id}&user_id=eq.$me",active)
+                likedIds=likedIds-post.id
+            } else {
+                api("POST","/rest/v1/post_likes",active,JSONObject().put("post_id",post.id).put("user_id",me))
+                likedIds=likedIds+post.id
             }
-            Text("New accounts can be created on the existing Skillect sign-up flow. Confirm your email before signing in.", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 14.dp))
+            loadFeed()
+        } catch(e:Exception){ error=e.message }
+    }
+
+    suspend fun toggleSave(post:Post) {
+        val active=token ?: return
+        val me=userId ?: return
+        try {
+            if(savedIds.contains(post.id)) {
+                api("DELETE","/rest/v1/saved_posts?post_id=eq.${post.id}&user_id=eq.$me",active)
+                savedIds=savedIds-post.id
+            } else {
+                api("POST","/rest/v1/saved_posts",active,JSONObject().put("post_id",post.id).put("user_id",me))
+                savedIds=savedIds+post.id
+            }
+        } catch(e:Exception){ error=e.message }
+    }
+
+    suspend fun loadComments(postId:String) {
+        val active=token ?: return
+        try {
+            val arr=apiArray("/rest/v1/comments?select=id,content,profiles(display_name)&post_id=eq.$postId&order=created_at.asc&limit=100",active)
+            comments=(0 until arr.length()).map { val p=arr.getJSONObject(it); val profile=p.optJSONObject("profiles")?:JSONObject(); SimpleItem(p.optString("id"),profile.optString("display_name","Member"),p.optString("content")) }
+        } catch(e:Exception){ error=e.message }
+    }
+
+    suspend fun addComment(postId:String) {
+        val active=token ?: return
+        val me=userId ?: return
+        if(commentText.isBlank()) return
+        try {
+            api("POST","/rest/v1/comments",active,JSONObject().put("post_id",postId).put("author_id",me).put("content",commentText.trim()))
+            commentText=""
+            loadComments(postId)
+            loadFeed()
+        } catch(e:Exception){ error=e.message }
+    }
+
+    if (token == null) {
+        Column(Modifier.fillMaxSize().background(Color.White).padding(horizontal=28.dp), verticalArrangement=Arrangement.Center) {
+            Text("Skillect", color=Blue, fontSize=34.sp, fontWeight=FontWeight.ExtraBold)
+            Text("Grow skills. Share progress. Build together.", color=Ink, modifier=Modifier.padding(top=6.dp,bottom=28.dp))
+            OutlinedTextField(email,{email=it},label={Text("Email")},modifier=Modifier.fillMaxWidth(),singleLine=true)
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(password,{password=it},label={Text("Password")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth(),singleLine=true)
+            error?.let { Text(it,color=Color.Red,modifier=Modifier.padding(top=10.dp)) }
+            Button(onClick={
+                scope.launch {
+                    busy=true; error=null
+                    try {
+                        val auth=api("POST","/auth/v1/token?grant_type=password",null,JSONObject().put("email",email.trim()).put("password",password))
+                        val newToken=auth.getString("access_token"); token=newToken; onToken(newToken)
+                    } catch(e:Exception){ error=e.message ?: "Sign in failed" }
+                    busy=false
+                }
+            },enabled=!busy && email.isNotBlank() && password.isNotBlank(),modifier=Modifier.fillMaxWidth().padding(top=20.dp),shape=RoundedCornerShape(14.dp)) { Text(if(busy) "Please wait…" else "Sign in") }
+            Text("Create your account using the existing Skillect sign-up flow and confirm your email before signing in.",color=Color.Gray,fontSize=12.sp,modifier=Modifier.padding(top=14.dp))
         }
     } else {
         Scaffold(
-            topBar = {
-                Row(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 20.dp, vertical = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Skillect", color = Blue, fontWeight = FontWeight.ExtraBold, fontSize = 25.sp)
-                    TextButton(onClick = { token = null; onSignOut() }) { Text("Sign out") }
-                }
-            },
-            bottomBar = {
-                NavigationBar(containerColor = Color.White) {
-                    NavigationBarItem(selected = true, onClick = {}, icon = { Text("⌂") }, label = { Text("Feed") })
-                    NavigationBarItem(selected = false, onClick = {}, icon = { Text("⌕") }, label = { Text("Explore") })
-                    NavigationBarItem(selected = false, onClick = {}, icon = { Text("+") }, label = { Text("Create") })
-                    NavigationBarItem(selected = false, onClick = {}, icon = { Text("◉") }, label = { Text("Profile") })
+            topBar={ Row(Modifier.fillMaxWidth().background(Color.White).padding(horizontal=20.dp,vertical=16.dp),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
+                Text("Skillect",color=Blue,fontWeight=FontWeight.ExtraBold,fontSize=25.sp)
+                TextButton(onClick={token=null;onSignOut()}){Text("Sign out")}
+            }},
+            bottomBar={
+                NavigationBar(containerColor=Color.White) {
+                    listOf("Feed","Explore","Create","Projects","Profile").forEach { item ->
+                        NavigationBarItem(selected=tab==item,onClick={tab=item},icon={Text(when(item){"Feed"->"⌂";"Explore"->"⌕";"Create"->"+";"Projects"->"▣";else->"◉"})},label={Text(item)})
+                    }
                 }
             }
         ) { padding ->
             Column(Modifier.fillMaxSize().background(Color(0xFFF8FAFF)).padding(padding)) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Your learning feed", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Ink)
-                    TextButton(onClick = { refresh++ }) { Text("Refresh") }
-                }
-                error?.let { Text(it, color = Color.Red, modifier = Modifier.padding(horizontal = 16.dp)) }
-                if (posts.isEmpty()) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Your feed is ready for your first idea.", color = Color.Gray)
-                    }
-                } else LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(posts, key = { it.id }) { post ->
-                        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(18.dp)) {
-                                Text(post.author, fontWeight = FontWeight.Bold, color = Ink)
-                                Text("@${post.handle}", color = Color.Gray, fontSize = 12.sp)
-                                Text(post.body, color = Ink, modifier = Modifier.padding(top = 12.dp), lineHeight = 22.sp)
-                                post.image?.let { Text("Media attached", color = Blue, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp)) }
+                error?.let { Text(it,color=Color.Red,modifier=Modifier.padding(horizontal=16.dp,vertical=6.dp)) }
+                when(tab) {
+                    "Feed" -> {
+                        Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=10.dp),horizontalArrangement=Arrangement.SpaceBetween) {
+                            Text("Your learning feed",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
+                            TextButton(onClick={scope.launch{loadFeed()}}){Text("Refresh")}
+                        }
+                        if(posts.isEmpty()) Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Text("Your feed is ready for your first idea.",color=Color.Gray)}
+                        else LazyColumn(contentPadding=PaddingValues(14.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                            items(posts,key={it.id}) { post ->
+                                Card(colors=CardDefaults.cardColors(containerColor=Color.White),shape=RoundedCornerShape(18.dp),modifier=Modifier.fillMaxWidth()) {
+                                    Column(Modifier.padding(18.dp)) {
+                                        Text(post.author,fontWeight=FontWeight.Bold,color=Ink)
+                                        Text("@${post.handle}",color=Color.Gray,fontSize=12.sp)
+                                        Text(post.body,color=Ink,modifier=Modifier.padding(top=12.dp),lineHeight=22.sp)
+                                        post.image?.let { Text("Media attached",color=Blue,fontSize=12.sp,modifier=Modifier.padding(top=10.dp)) }
+                                        Row(Modifier.fillMaxWidth().padding(top=10.dp),horizontalArrangement=Arrangement.SpaceBetween) {
+                                            TextButton(onClick={scope.launch{toggleLike(post)}}){Text((if(likedIds.contains(post.id)) "♥ " else "♡ ")+post.likes)}
+                                            TextButton(onClick={scope.launch{showCommentsFor=post.id;loadComments(post.id)}}){Text("Comments ${post.comments}")}
+                                            TextButton(onClick={scope.launch{toggleSave(post)}}){Text(if(savedIds.contains(post.id)) "Saved" else "Save")}
+                                        }
+                                    }
+                                }
                             }
                         }
+                    }
+                    "Explore" -> Column(Modifier.fillMaxSize().padding(16.dp)) {
+                        Text("Find your people",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
+                        OutlinedTextField(searchText,{searchText=it},label={Text("Search by name or username")},modifier=Modifier.fillMaxWidth())
+                        Button(onClick={scope.launch{searchPeople()}},modifier=Modifier.padding(top=8.dp)){Text("Search")}
+                        LazyColumn { items(results){ item -> Card(Modifier.fillMaxWidth().padding(vertical=5.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray)}} } }
+                    }
+                    "Create" -> Column(Modifier.fillMaxSize().padding(16.dp)) {
+                        Text("Share your progress",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
+                        OutlinedTextField(createText,{createText=it},label={Text("What are you learning or building?")},modifier=Modifier.fillMaxWidth().heightIn(min=150.dp),maxLines=8)
+                        Button(onClick={scope.launch{createPost()}},enabled=createText.isNotBlank()&&!busy,modifier=Modifier.padding(top=12.dp)){Text(if(busy)"Publishing…" else "Publish post")}
+                    }
+                    "Projects" -> LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
+                        item { Text("Projects & builds",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink) }
+                        items(projects){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray)}} }
+                        item { TextButton(onClick={scope.launch{loadCommunities();tab="Communities"}}){Text("Explore communities")} }
+                    }
+                    "Profile" -> Column(Modifier.fillMaxSize().padding(20.dp)) {
+                        Text(displayName.ifBlank{"Your profile"},fontSize=25.sp,fontWeight=FontWeight.Bold,color=Ink)
+                        Text("@$username",color=Color.Gray)
+                        Text(bio.ifBlank{"Add your bio on the existing profile editor"},modifier=Modifier.padding(top=12.dp))
+                        Text("Posts: ${posts.count{it.authorId==userId}}",modifier=Modifier.padding(top=14.dp))
+                        TextButton(onClick={scope.launch{loadFeed()}}){Text("Refresh profile")}
+                        TextButton(onClick={scope.launch{loadCommunities();tab="Communities"}}){Text("Communities")}
+                    }
+                    "Communities" -> LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
+                        item { Text("Communities",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink) }
+                        items(communities){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray)}} }
                     }
                 }
             }
         }
     }
-}
 
-private suspend fun api(method: String, path: String, token: String?, json: JSONObject): JSONObject = withContext(Dispatchers.IO) {
-    val body = json.toString().toRequestBody("application/json".toMediaType())
-    val builder = Request.Builder().url(URL + path).addHeader("apikey", KEY).addHeader("Content-Type", "application/json").method(method, body)
-    if (token != null) builder.addHeader("Authorization", "Bearer $token")
-    client.newCall(builder.build()).execute().use { response ->
-        val text = response.body?.string().orEmpty()
-        if (!response.isSuccessful) throw IllegalStateException(JSONObject(text).optString("msg", JSONObject(text).optString("message", "Request failed (${response.code})")))
-        JSONObject(text)
+    showCommentsFor?.let { postId ->
+        AlertDialog(
+            onDismissRequest={showCommentsFor=null},
+            title={Text("Comments")},
+            text={
+                Column {
+                    LazyColumn(Modifier.heightIn(max=280.dp)) {
+                        items(comments){ c -> Column(Modifier.padding(vertical=5.dp)){Text(c.title,fontWeight=FontWeight.Bold);Text(c.detail)} }
+                    }
+                    OutlinedTextField(commentText,{commentText=it},label={Text("Write a comment")},modifier=Modifier.fillMaxWidth())
+                }
+            },
+            confirmButton={TextButton(onClick={scope.launch{addComment(postId)}}){Text("Send")}},
+            dismissButton={TextButton(onClick={showCommentsFor=null}){Text("Close")}}
+        )
     }
 }
 
-private suspend fun apiArray(path: String, token: String): JSONArray = withContext(Dispatchers.IO) {
-    val request = Request.Builder().url(URL + path).addHeader("apikey", KEY).addHeader("Authorization", "Bearer $token").build()
+private suspend fun api(method:String,path:String,token:String?,json:JSONObject?=null):JSONObject = withContext(Dispatchers.IO) {
+    val builder=Request.Builder().url(URL+path).addHeader("apikey",KEY).addHeader("Content-Type","application/json")
+    if(token!=null) builder.addHeader("Authorization","Bearer $token")
+    val body=json?.toString()?.toRequestBody("application/json".toMediaType())
+    when(method) {
+        "GET" -> builder.get()
+        "POST" -> builder.post(body ?: "{}".toRequestBody("application/json".toMediaType())).addHeader("Prefer","return=representation")
+        "PATCH" -> builder.patch(body ?: "{}".toRequestBody("application/json".toMediaType()))
+        "DELETE" -> builder.delete()
+        else -> builder.get()
+    }
+    client.newCall(builder.build()).execute().use { response ->
+        val text=response.body?.string().orEmpty()
+        if(!response.isSuccessful) throw IllegalStateException(try{JSONObject(text).optString("message",JSONObject(text).optString("msg","Request failed (${response.code})"))}catch(_:Exception){"Request failed (${response.code})"})
+        if(text.isBlank()) JSONObject() else try{JSONObject(text)}catch(_:Exception){JSONObject().put("data",JSONArray(text))}
+    }
+}
+
+private suspend fun apiArray(path:String,token:String):JSONArray = withContext(Dispatchers.IO) {
+    val request=Request.Builder().url(URL+path).addHeader("apikey",KEY).addHeader("Authorization","Bearer $token").build()
     client.newCall(request).execute().use { response ->
-        val text = response.body?.string().orEmpty()
-        if (!response.isSuccessful) throw IllegalStateException("Feed request failed (${response.code})")
+        val text=response.body?.string().orEmpty()
+        if(!response.isSuccessful) throw IllegalStateException("Request failed (${response.code}): $text")
         JSONArray(text)
     }
 }
