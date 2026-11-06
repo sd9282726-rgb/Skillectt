@@ -1,6 +1,8 @@
 import SwiftUI
 
-private let skillectBlue = Color(red: 0.19, green: 0.36, blue: 0.96)
+private let skillectBlue = Color(red: 0.0, green: 0.78, blue: 0.47)
+private let skillectBlack = Color(red: 0.02, green: 0.02, blue: 0.035)
+private let skillectMuted = Color(red: 0.46, green: 0.44, blue: 0.55)
 
 struct RootView: View {
     @StateObject private var model = AppModel()
@@ -12,7 +14,7 @@ struct RootView: View {
                     .task { await model.restoreSession() }
             }
         }
-        .tint(skillectBlue)
+        .tint(skillectBlue).preferredColorScheme(.dark)
     }
 }
 
@@ -43,17 +45,51 @@ struct SignInView: View {
 
 struct MainTabs: View {
     @ObservedObject var model: AppModel
-    var body: some View {
-        TabView {
-            FeedView(model: model).tabItem { Label("Feed", systemImage: "house") }
-            ExploreView(model: model).tabItem { Label("Explore", systemImage: "magnifyingglass") }
-            CreateView(model: model).tabItem { Label("Create", systemImage: "plus.square") }
-            ProjectsView(model: model).tabItem { Label("Projects", systemImage: "hammer") }
-            CommunitiesView(model: model).tabItem { Label("Groups", systemImage: "person.3") }
-            NotificationsView(model: model).tabItem { Label("Alerts", systemImage: "bell") }
-            ProfileView(model: model).tabItem { Label("Profile", systemImage: "person.crop.circle") }
-        }
+    init(model: AppModel) {
+        self.model = model
+        let appearance = UITabBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor(skillectBlack)
+        appearance.stackedLayoutAppearance.normal.iconColor = UIColor(skillectMuted)
+        appearance.stackedLayoutAppearance.normal.titleTextAttributes = [.foregroundColor: UIColor(skillectMuted)]
+        appearance.stackedLayoutAppearance.selected.iconColor = UIColor(skillectBlue)
+        appearance.stackedLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: UIColor(skillectBlue)]
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
     }
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 13) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 11).fill(Color(red: 0.06, green: 0.06, blue: 0.09))
+                    Text("s").font(.system(size: 34, weight: .bold)).foregroundStyle(skillectBlue)
+                }.frame(width: 42, height: 42)
+                Text("Skillect").font(.system(size: 25, weight: .heavy)).foregroundStyle(skillectBlue)
+                Spacer()
+            }
+            .padding(.horizontal, 22).frame(height: 72)
+            .background(skillectBlack)
+            TabView {
+                EmptyFeedScreen().tabItem { Label("Feed", systemImage: "house") }
+                ExploreView(model: model).tabItem { Label("Explore", systemImage: "safari") }
+                CommunitiesView(model: model).tabItem { Label("Communities", systemImage: "person.3") }
+                CreateView(model: model).tabItem { Label("Create", systemImage: "plus.square") }
+                MessagesPlaceholder().tabItem { Label("Messages", systemImage: "bubble.left") }
+                ProfileView(model: model).tabItem { Label("Profile", systemImage: "person") }
+            }
+            .toolbarBackground(skillectBlack, for: .tabBar)
+            .toolbarBackground(.visible, for: .tabBar)
+        }
+        .background(skillectBlack.ignoresSafeArea())
+    }
+}
+
+private struct EmptyFeedScreen: View {
+    var body: some View { skillectBlack.ignoresSafeArea() }
+}
+
+private struct MessagesPlaceholder: View {
+    var body: some View { skillectBlack.ignoresSafeArea() }
 }
 
 private struct PostCard: View {
