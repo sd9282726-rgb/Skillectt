@@ -305,7 +305,7 @@ private struct PostCard: View {
                         .foregroundStyle(model.likedIds.contains(post.id) ? .pink : .secondary)
                 }
                 Spacer()
-                Button { showComments = true; Task { await model.loadComments(postId: post.id) } } label: {
+                Button { showComments = true; model.activeCommentsPostId = post.id; Task { await model.loadComments(postId: post.id) } } label: {
                     Label("\(post.comments_count)", systemImage: "bubble.right").foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -318,7 +318,7 @@ private struct PostCard: View {
         .padding(16)
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 18))
-        .sheet(isPresented: $showComments) { CommentsView(model: model, postId: post.id) }
+        .sheet(isPresented: $showComments, onDismiss: { model.activeCommentsPostId = nil }) { CommentsView(model: model, postId: post.id) }
     }
 }
 
