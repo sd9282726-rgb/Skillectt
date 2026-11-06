@@ -669,23 +669,6 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         }
     }
 
-    DisposableEffect(token) {
-        val activeToken = token
-        if(activeToken!=null) {
-            val realtime=RealtimeSocket(activeToken) {
-                scope.launch {
-                    loadFeed()
-                    loadNotifications()
-                    loadConversations()
-                    activeConversationId?.let { loadChatMessages(it) }
-                    showCommentsFor?.let { loadComments(it) }
-                }
-            }
-            realtime.connect()
-            onDispose { realtime.close() }
-        } else onDispose { }
-    }
-
     suspend fun createPost() {
         val active=token ?: return
         if(createText.isBlank() && selectedMediaUri==null) return
@@ -746,6 +729,23 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             val arr=apiArray("/rest/v1/comments?select=id,content,profiles(display_name)&post_id=eq.$postId&order=created_at.asc&limit=100",active)
             comments=(0 until arr.length()).map { val p=arr.getJSONObject(it); val profile=p.optJSONObject("profiles")?:JSONObject(); SimpleItem(p.optString("id"),profile.optString("display_name","Member"),p.optString("content")) }
         } catch(e:Exception){ error=e.message }
+    }
+
+    DisposableEffect(token) {
+        val activeToken = token
+        if(activeToken!=null) {
+            val realtime=RealtimeSocket(activeToken) {
+                scope.launch {
+                    loadFeed()
+                    loadNotifications()
+                    loadConversations()
+                    activeConversationId?.let { loadChatMessages(it) }
+                    showCommentsFor?.let { loadComments(it) }
+                }
+            }
+            realtime.connect()
+            onDispose { realtime.close() }
+        } else onDispose { }
     }
 
 
