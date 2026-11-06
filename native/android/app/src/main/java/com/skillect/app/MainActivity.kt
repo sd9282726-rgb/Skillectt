@@ -230,6 +230,33 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     }
 
 
+
+    fun signOutUser() {
+        val active=token
+        val me=userId
+        if(active==null || me==null || FirebaseApp.getApps(context).isEmpty()) {
+            token=null
+            userId=null
+            onSignOut()
+            return
+        }
+        FirebaseMessaging.getInstance().token.addOnSuccessListener { fcm ->
+            scope.launch {
+                try {
+                    val encoded=URLEncoder.encode(fcm,"UTF-8")
+                    api("DELETE","/rest/v1/device_tokens?user_id=eq."+me+"&platform=eq.android&token=eq."+encoded,active)
+                } catch(_:Exception) { }
+                token=null
+                userId=null
+                onSignOut()
+            }
+        }.addOnFailureListener {
+            token=null
+            userId=null
+            onSignOut()
+        }
+    }
+
     suspend fun submitAccountAppeal() {
         val active=token ?: return
         val me=userId ?: return
@@ -613,7 +640,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                 Button(onClick={scope.launch{submitAccountAppeal()}},enabled=appealText.trim().length>=20,modifier=Modifier.fillMaxWidth().padding(top=12.dp)){Text("Submit appeal")}
             }
             error?.let { Text(it,color=Color.Red,modifier=Modifier.padding(top=8.dp)) }
-            TextButton(onClick={token=null;userId=null;isRestricted=false;onSignOut()}){Text("Sign out")}
+            TextButton(onClick={signOutUser()}){Text("Sign out")}
         }
     } else if (token == null) {
         Column(Modifier.fillMaxSize().background(SkillectBlack).padding(horizontal=28.dp), verticalArrangement=Arrangement.Center) {
@@ -791,7 +818,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         Button(onClick={scope.launch{updateProfile()}}){Text("Save profile")}
                         Text("Posts: ${posts.count{it.authorId==userId}}",modifier=Modifier.padding(top=14.dp))
                         TextButton(onClick={scope.launch{loadFeed()}}){Text("Refresh profile")}
-                        TextButton(onClick={token=null;userId=null;onSignOut()}){Text("Sign out",color=Color.Red)}
+                        TextButton(onClick={signOutUser()}){Text("Sign out",color=Color.Red)}
                     }
                     "Messages" -> Column(Modifier.fillMaxSize().padding(16.dp)) {
                         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
