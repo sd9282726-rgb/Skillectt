@@ -166,7 +166,7 @@ async function registerAsset(
       provider_reference: providerReference,
       decision_reason: reason,
       public_url: publicUrl,
-      reviewed_at: status === "pending" ? null : new Date().toISOString(),
+      reviewed_at: null,
     }),
   });
   return response.ok;
