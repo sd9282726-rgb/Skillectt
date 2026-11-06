@@ -85,7 +85,7 @@ Deno.serve(async (request: Request) => {
   if (!notificationId || !userId) return json(400, { error: "notification_id and user_id are required" });
 
   const notificationResponse = await fetch(
-    base + "/rest/v1/notifications?select=id,user_id,type& id=eq." + encodeURIComponent(notificationId) + "&user_id=eq." + encodeURIComponent(userId),
+    base + "/rest/v1/notifications?select=id,user_id,type&id=eq." + encodeURIComponent(notificationId) + "&user_id=eq." + encodeURIComponent(userId),
     { headers: { apikey: serviceKey, Authorization: "Bearer " + serviceKey } },
   );
   if (!notificationResponse.ok) return json(503, { error: "Notification record could not be verified" });
