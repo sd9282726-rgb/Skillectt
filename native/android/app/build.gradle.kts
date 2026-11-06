@@ -20,6 +20,10 @@ android {
         versionName = "1.1.0"
         buildConfigField("String", "SUPABASE_URL", "\"https://chohswyxsckpwyzlbzav.supabase.co\"")
         buildConfigField("String", "SUPABASE_KEY", "\"sb_publishable__1Bd6TEnLWDtTdT4U4e-oQ_0MeY2E17\"")
+        buildConfigField("String", "FIREBASE_API_KEY", "\"${System.getenv("FIREBASE_API_KEY") ?: ""}\"")
+        buildConfigField("String", "FIREBASE_APP_ID", "\"${System.getenv("FIREBASE_APP_ID") ?: ""}\"")
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${System.getenv("FIREBASE_PROJECT_ID") ?: ""}\"")
+        buildConfigField("String", "FIREBASE_SENDER_ID", "\"${System.getenv("FIREBASE_SENDER_ID") ?: ""}\"")
     }
     signingConfigs {
         create("release") {
@@ -54,5 +58,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation(platform("com.google.firebase:firebase-bom:35.1.0"))
+    implementation("com.google.firebase:firebase-messaging")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
