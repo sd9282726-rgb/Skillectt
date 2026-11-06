@@ -217,7 +217,12 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                 username = p.optString("username")
                 bio = p.optString("bio")
             }
-        } catch (e: Exception) { error = e.message }
+        } catch (e: Exception) {
+            isRestricted = true
+            restrictionStatus = "verification_error"
+            restrictionReason = "We could not verify your account status. Please try again."
+            error = e.message
+        }
     }
 
     suspend fun loadFeed() {
@@ -411,9 +416,11 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     LaunchedEffect(token, refresh) {
         if (token != null) {
             loadUser()
-            loadFeed()
-            loadProjects()
-            loadCommunities()
+            if (!isRestricted) {
+                loadFeed()
+                loadProjects()
+                loadCommunities()
+            }
         }
     }
 
