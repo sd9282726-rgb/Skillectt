@@ -18,7 +18,8 @@ This directory contains separate native Android (Kotlin/Jetpack Compose) and iOS
 - Profile editing (Android and iOS), profile discovery and follow/unfollow.
 - Read projects and create a project (Android and iOS).
 - Browse communities and join (Android and iOS).
-- Read notifications and mark them read (Android and iOS).\n- Report posts and block accounts (Android and iOS).
+- Read notifications and mark them read (Android and iOS).
+- Report posts and block accounts (Android and iOS).
 
 ## Still required before a complete public release
 - Device testing on real Android and iOS devices, including account creation, email confirmation, password reset and session expiry.
