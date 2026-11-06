@@ -74,6 +74,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     var createText by remember { mutableStateOf("") }
     var searchText by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
+    var followingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var projects by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
     var communities by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
     var displayName by remember { mutableStateOf("") }
@@ -212,6 +213,21 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             val q=URLEncoder.encode(searchText.trim(), "UTF-8")
             val arr=apiArray("/rest/v1/profiles?select=id,display_name,username,bio&or=(username.ilike.%25$q%25,display_name.ilike.%25$q%25)&limit=30",active)
             results=(0 until arr.length()).map { val p=arr.getJSONObject(it); SimpleItem(p.optString("id"),p.optString("display_name")+"  @"+p.optString("username"),p.optString("bio")) }
+        } catch(e:Exception){ error=e.message }
+    }
+
+    suspend fun toggleFollow(targetId:String) {
+        val active=token ?: return
+        val me=userId ?: return
+        if(targetId==me) return
+        try {
+            if(followingIds.contains(targetId)) {
+                api("DELETE","/rest/v1/follows?follower_id=eq.$me&following_id=eq.$targetId",active)
+                followingIds=followingIds-targetId
+            } else {
+                api("POST","/rest/v1/follows",active,JSONObject().put("follower_id",me).put("following_id",targetId))
+                followingIds=followingIds+targetId
+            }
         } catch(e:Exception){ error=e.message }
     }
 
@@ -391,7 +407,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         Text("Find your people",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
                         OutlinedTextField(searchText,{searchText=it},label={Text("Search by name or username")},modifier=Modifier.fillMaxWidth())
                         Button(onClick={scope.launch{searchPeople()}},modifier=Modifier.padding(top=8.dp)){Text("Search")}
-                        LazyColumn { items(results){ item -> Card(Modifier.fillMaxWidth().padding(vertical=5.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);TextButton(onClick={scope.launch{blockUser(item.id)}}){Text("Block")}}} } }
+                        LazyColumn { items(results){ item -> Card(Modifier.fillMaxWidth().padding(vertical=5.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);Row { TextButton(onClick={scope.launch{toggleFollow(item.id)}}){Text(if(followingIds.contains(item.id)) "Following" else "Follow")};TextButton(onClick={scope.launch{blockUser(item.id)}}){Text("Block")} }}} } }
                     }
                     "Create" -> Column(Modifier.fillMaxSize().padding(16.dp)) {
                         Text("Share your progress",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
