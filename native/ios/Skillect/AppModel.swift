@@ -99,20 +99,43 @@ final class AppModel: ObservableObject {
         do {
             let data = try await request(path: "/rest/v1/account_enforcements?select=status,reason&user_id=eq.\(me)&limit=1")
             let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] ?? []
-            guard let enforcement = rows.first else { return true }
-            let status = enforcement["status"] as? String ?? "suspended"
-            errorMessage = status == "permanent"
-                ? "This account has been permanently banned from Skillect."
-                : "This account is temporarily restricted."
-            signOut()
+            guard let enforcement = rows.first else { isAccountRestricted = false; return true }
+            isAccountRestricted = true
+            restrictionStatus = enforcement["status"] as? String ?? "suspended"
+            restrictionReason = enforcement["reason"] as? String ?? "No reason was provided."
+            await loadMyAppeal()
             return false
         } catch {
-            errorMessage = "We could not verify this account's safety status. Please try again."
-            signOut()
+            isAccountRestricted = true
+            restrictionStatus = "verification_error"
+            restrictionReason = "We could not verify the account status. Retry before continuing."
+            errorMessage = error.localizedDescription
             return false
         }
     }
 
+
+
+    func loadMyAppeal() async {
+        guard let me = userId else { return }
+        do {
+            let data = try await request(path: "/rest/v1/moderation_appeals?select=status&user_id=eq.\(me)&order=created_at.desc&limit=1")
+            let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] ?? []
+            myAppealStatus = rows.first?["status"] as? String
+        } catch { myAppealStatus = nil }
+    }
+
+    func submitAppeal(_ explanation: String) async {
+        guard let me = userId else { return }
+        let clean = explanation.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard clean.count >= 20 else { errorMessage = "Please explain your appeal in at least 20 characters."; return }
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["user_id": me, "enforcement_user_id": me, "explanation": clean])
+            _ = try await request(path: "/rest/v1/moderation_appeals", method: "POST", body: body, prefer: "return=minimal")
+            myAppealStatus = "pending"
+            errorMessage = nil
+        } catch { errorMessage = error.localizedDescription }
+    }
 
     var isModerator: Bool {
         guard let token = accessToken else { return false }
@@ -468,6 +491,8 @@ final class AppModel: ObservableObject {
     func signOut() {
         accessToken = nil
         userId = nil
+        isAccountRestricted = false
+        myAppealStatus = nil
         posts = []
         likedIds = []
         savedIds = []
