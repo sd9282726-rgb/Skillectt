@@ -404,23 +404,19 @@ final class AppModel: ObservableObject {
     }
 
     func submitVideoPost(_ content: String, videoData: Data, mimeType: String, fileName: String) async {
-        guard accessToken != nil else { return }
+        guard let token = accessToken, let me = userId else { return }
         guard ["video/mp4", "video/webm", "video/quicktime"].contains(mimeType) else { errorMessage = "Choose an MP4, WebM or MOV video"; return }
         guard !videoData.isEmpty, videoData.count <= 50 * 1024 * 1024 else { errorMessage = "Video must be 50 MB or smaller"; return }
         isBusy = true
         errorMessage = nil
         infoMessage = nil
         defer { isBusy = false }
-        let boundary = "SkillectBoundary-\(UUID().uuidString)"
-        var body = Data()
-        func append(_ value: String) { body.append(Data(value.utf8)) }
-        let safeName = fileName.replacingOccurrences(of: "\"", with: "")
-        append("--\(boundary)\r\nContent-Disposition: form-data; name=\"content\"\r\n\r\n\(content.trimmingCharacters(in: .whitespacesAndNewlines))\r\n")
-        append("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(safeName)\"\r\nContent-Type: \(mimeType)\r\n\r\n")
-        body.append(videoData)
-        append("\r\n--\(boundary)--\r\n")
+        let ext = mimeType == "video/webm" ? "webm" : (mimeType == "video/quicktime" ? "mov" : "mp4")
+        let storagePath = "\(me)/\(UUID().uuidString).\(ext)"
         do {
-            _ = try await request(path: "/functions/v1/submit-video-post", method: "POST", body: body, contentType: "multipart/form-data; boundary=\(boundary)")
+            _ = try await request(path: "/storage/v1/object/media-quarantine/\(storagePath)", method: "POST", body: videoData, contentType: mimeType)
+            let registration = try JSONSerialization.data(withJSONObject: ["storage_path": storagePath, "content": content.trimmingCharacters(in: .whitespacesAndNewlines)])
+            _ = try await request(path: "/functions/v1/submit-video-post", method: "POST", body: registration)
             infoMessage = "Video submitted for moderator review. It will appear in the feed after approval."
         } catch { errorMessage = error.localizedDescription }
     }
