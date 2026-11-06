@@ -3,6 +3,7 @@ package com.skillect.app
 import android.os.Bundle
 import android.net.Uri
 import android.content.Context
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import java.util.UUID
@@ -417,7 +418,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                                         Text(post.author,fontWeight=FontWeight.Bold,color=Ink)
                                         Text("@${post.handle}",color=Color.Gray,fontSize=12.sp)
                                         Text(post.body,color=Ink,modifier=Modifier.padding(top=12.dp),lineHeight=22.sp)
-                                        post.image?.let { Text("Media attached",color=Blue,fontSize=12.sp,modifier=Modifier.padding(top=10.dp)) }
+                                        post.image?.let { mediaUrl -> TextButton(onClick={context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(mediaUrl)))},modifier=Modifier.padding(top=4.dp)){Text("Open attached image",color=Blue,fontSize=12.sp)} }
                                         Row(Modifier.fillMaxWidth().padding(top=10.dp),horizontalArrangement=Arrangement.SpaceBetween) {
                                             TextButton(onClick={scope.launch{toggleLike(post)}}){Text((if(likedIds.contains(post.id)) "♥ " else "♡ ")+post.likes)}
                                             TextButton(onClick={scope.launch{showCommentsFor=post.id;loadComments(post.id)}}){Text("Comments ${post.comments}")}
