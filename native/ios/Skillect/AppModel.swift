@@ -13,8 +13,12 @@ struct AuthResponse: Decodable {
 }
 
 struct PostProfile: Decodable {
-    let display_name: String?
+    let displayName: String?
     let username: String?
+    enum CodingKeys: String, CodingKey {
+        case displayName = "display_name"
+        case username
+    }
 }
 
 struct FeedPost: Decodable, Identifiable {
