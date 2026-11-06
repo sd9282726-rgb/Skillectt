@@ -78,7 +78,17 @@ final class AppModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
 
-    func restoreSession() async {\n        guard accessToken != nil else { return }\n        do {\n            let data = try await request(path: "/auth/v1/user")\n            let user = try JSONDecoder().decode(AuthUser.self, from: data)\n            userId = user.id\n            await loadFeed()\n        } catch { errorMessage = error.localizedDescription }\n    }\n\n    func signIn(email: String, password: String) async {
+    func restoreSession() async {
+        guard accessToken != nil else { return }
+        do {
+            let data = try await request(path: "/auth/v1/user")
+            let user = try JSONDecoder().decode(AuthUser.self, from: data)
+            userId = user.id
+            await loadFeed()
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func signIn(email: String, password: String) async {
         isBusy = true
         errorMessage = nil
         defer { isBusy = false }
@@ -235,7 +245,8 @@ final class AppModel: ObservableObject {
             await loadDirectory()
         } catch { errorMessage = error.localizedDescription }
     }
-\n    func signOut() {
+
+    func signOut() {
         accessToken = nil
         userId = nil
         posts = []
