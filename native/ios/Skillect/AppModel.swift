@@ -66,6 +66,7 @@ struct ModerationReport: Decodable, Identifiable {
  let id:String; let reporter_id:String; let target_type:String; let target_id:String
  let reason:String; let details:String?; let status:String; let created_at:String
 }
+struct ModerationTextCase: Decodable, Identifiable { let id:String; let user_id:String; let content_type:String; let content_snapshot:String; let reason:String; let status:String; let created_at:String }
 struct ModerationAppeal: Decodable, Identifiable {
  let id:String; let user_id:String; let enforcement_user_id:String
  let explanation:String; let status:String; let created_at:String
@@ -182,6 +183,8 @@ final class AppModel: ObservableObject {
             }
             let appeals = try await request(path: "/rest/v1/moderation_appeals?select=id,user_id,enforcement_user_id,explanation,status,created_at&status=in.(pending,under_review)&order=created_at.asc&limit=100")
             moderationAppeals = try JSONDecoder().decode([ModerationAppeal].self, from: appeals)
+            let textCases = try await request(path: "/rest/v1/moderation_text_cases?select=id,user_id,content_type,content_snapshot,reason,status,created_at&status=eq.blocked&order=created_at.asc&limit=100")
+            moderationTextCases = try JSONDecoder().decode([ModerationTextCase].self, from: textCases)
             errorMessage = nil
         } catch { errorMessage = error.localizedDescription }
     }
@@ -229,6 +232,28 @@ final class AppModel: ObservableObject {
             let body = try JSONSerialization.data(withJSONObject: ["user_id": targetUserId, "status": "permanent", "reason": "Moderator action from report: \(report.reason)", "issued_by": moderatorId])
             _ = try await request(path: "/rest/v1/account_enforcements", method: "POST", body: body, prefer: "return=minimal")
             await resolveReport(report)
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+
+    func reviewTextCase(_ item: ModerationTextCase, ban: Bool) async {
+        guard isModerator, let moderatorId = userId else { return }
+        do {
+            if ban {
+                let existing = try await request(path: "/rest/v1/account_enforcements?select=user_id&user_id=eq.\(item.user_id)&limit=1")
+                let rows = try JSONSerialization.jsonObject(with: existing) as? [[String: String]] ?? []
+                if rows.isEmpty {
+                    let create = try JSONSerialization.data(withJSONObject: ["user_id": item.user_id, "status": "permanent", "reason": "Moderator-confirmed text safety violation: \(item.reason)", "issued_by": moderatorId])
+                    _ = try await request(path: "/rest/v1/account_enforcements", method: "POST", body: create, prefer: "return=minimal")
+                } else {
+                    let update = try JSONSerialization.data(withJSONObject: ["status": "permanent", "reason": "Moderator-confirmed text safety violation: \(item.reason)", "issued_by": moderatorId])
+                    _ = try await request(path: "/rest/v1/account_enforcements?user_id=eq.\(item.user_id)", method: "PATCH", body: update, prefer: "return=minimal")
+                }
+            }
+            let status = ban ? "escalated" : "reviewed"
+            let body = try JSONSerialization.data(withJSONObject: ["status": status, "reviewed_by": moderatorId, "reviewed_at": ISO8601DateFormatter().string(from: Date()), "moderator_note": ban ? "Account permanently banned after moderator review" : "Reviewed; no account ban applied"])
+            _ = try await request(path: "/rest/v1/moderation_text_cases?id=eq.\(item.id)", method: "PATCH", body: body, prefer: "return=minimal")
+            await loadModerationQueue()
         } catch { errorMessage = error.localizedDescription }
     }
 
