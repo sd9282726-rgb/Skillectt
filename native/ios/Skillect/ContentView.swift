@@ -46,10 +46,10 @@ struct MainTabs: View {
     var body: some View {
         TabView {
             FeedView(model: model).tabItem { Label("Feed", systemImage: "house") }
-            ExploreView().tabItem { Label("Explore", systemImage: "magnifyingglass") }
+            ExploreView(model: model).tabItem { Label("Explore", systemImage: "magnifyingglass") }
             CreateView(model: model).tabItem { Label("Create", systemImage: "plus.square") }
-            ProjectsView().tabItem { Label("Projects", systemImage: "hammer") }
-            ProfileView(model: model).tabItem { Label("Profile", systemImage: "person.crop.circle") }
+            ProjectsView(model: model).tabItem { Label("Projects", systemImage: "hammer") }
+            CommunitiesView(model: model).tabItem { Label("Groups", systemImage: "person.3") }\n            NotificationsView(model: model).tabItem { Label("Alerts", systemImage: "bell") }\n            ProfileView(model: model).tabItem { Label("Profile", systemImage: "person.crop.circle") }
         }
     }
 }
@@ -192,35 +192,145 @@ struct CommentsView: View {
 }
 
 struct ExploreView: View {
+    @ObservedObject var model: AppModel
+    @State private var query = ""
+    @State private var following = Set<String>()
+    var filtered: [DirectoryProfile] {
+        guard !query.isEmpty else { return model.directory }
+        return model.directory.filter { $0.username.localizedCaseInsensitiveContains(query) || $0.display_name.localizedCaseInsensitiveContains(query) || $0.bio.localizedCaseInsensitiveContains(query) }
+    }
     var body: some View {
         NavigationStack {
-            ContentUnavailableView("Discover is next", systemImage: "magnifyingglass", description: Text("Search for people, skills and communities will be connected in the next development pass."))
-                .navigationTitle("Explore")
+            VStack {
+                TextField("Search people and skills", text: $query)
+                    .textFieldStyle(.roundedBorder).padding()
+                List(filtered) { person in
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(person.display_name).font(.headline)
+                            Text("@\(person.username)").font(.caption).foregroundStyle(.secondary)
+                            if !person.bio.isEmpty { Text(person.bio).font(.subheadline).foregroundStyle(.secondary).lineLimit(2) }
+                        }
+                        Spacer()
+                        if person.id != model.userId {
+                            Button(following.contains(person.id) ? "Following" : "Follow") {
+                                Task {
+                                    await model.toggleFollow(person.id)
+                                    if following.contains(person.id) { following.remove(person.id) } else { following.insert(person.id) }
+                                }
+                            }.buttonStyle(.bordered)
+                        }
+                    }
+                }.listStyle(.plain)
+            }.navigationTitle("Explore").task { await model.loadDirectory() }
         }
     }
 }
 
 struct ProjectsView: View {
+    @ObservedObject var model: AppModel
+    @State private var showCreate = false
     var body: some View {
         NavigationStack {
-            ContentUnavailableView("Project showcase is next", systemImage: "hammer", description: Text("Your projects will have their own searchable showcase and progress pages."))
-                .navigationTitle("Projects")
+            List(model.projects) { project in
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(project.title).font(.headline)
+                    Text(project.description).foregroundStyle(.secondary)
+                    Text(project.status.replacingOccurrences(of: "_", with: " ").capitalized).font(.caption).foregroundStyle(skillectBlue)
+                }.padding(.vertical, 5)
+            }
+            .navigationTitle("Projects")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { showCreate = true } label: { Image(systemName: "plus") } } }
+            .sheet(isPresented: $showCreate) { ProjectCreateView(model: model) }
+            .task { await model.loadDirectory() }
+        }
+    }
+}
+
+struct ProjectCreateView: View {
+    @ObservedObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var title = ""
+    @State private var description = ""
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Project name", text: $title)
+                TextField("What are you building?", text: $description, axis: .vertical).lineLimit(4...8)
+                Button("Create project") {
+                    Task { await model.createProject(title: title, description: description); dismiss() }
+                }.disabled(title.isEmpty || description.isEmpty)
+            }.navigationTitle("New project")
+        }
+    }
+}
+
+struct CommunitiesView: View {
+    @ObservedObject var model: AppModel
+    var body: some View {
+        NavigationStack {
+            List(model.communities) { community in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(community.name).font(.headline)
+                    Text(community.description).foregroundStyle(.secondary)
+                    HStack {
+                        Text("\(community.member_count) members").font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Join") { Task { await model.joinCommunity(community.id) } }.buttonStyle(.bordered)
+                    }
+                }.padding(.vertical, 5)
+            }.navigationTitle("Communities").task { await model.loadDirectory() }
+        }
+    }
+}
+
+struct NotificationsView: View {
+    @ObservedObject var model: AppModel
+    var body: some View {
+        NavigationStack {
+            List(model.notifications) { notification in
+                Button { Task { await model.markNotificationRead(notification.id) } } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(notification.message ?? notification.type.capitalized).foregroundStyle(.primary)
+                            Text(notification.type).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if !notification.read { Circle().fill(skillectBlue).frame(width: 8, height: 8) }
+                    }
+                }
+            }.navigationTitle("Notifications").task { await model.loadDirectory() }
         }
     }
 }
 
 struct ProfileView: View {
     @ObservedObject var model: AppModel
+    @State private var displayName = ""
+    @State private var bio = ""
     var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
-                Image(systemName: "person.crop.circle.fill").font(.system(size: 64)).foregroundStyle(skillectBlue)
-                Text("Your Skillect profile").font(.title2.bold())
-                Text("Your profile and skills will appear here.").foregroundStyle(.secondary)
-                Text("Posts shared: \(model.posts.filter { $0.authorId == model.userId }.count)")
-                Button("Refresh feed") { Task { await model.loadFeed() } }
-                Spacer()
-            }.padding(.top, 35).navigationTitle("Profile")
+            Form {
+                Section("Your profile") {
+                    TextField("Display name", text: $displayName)
+                    TextField("Bio", text: $bio, axis: .vertical).lineLimit(3...6)
+                    Text("@\(model.currentProfile?.username ?? "")").foregroundStyle(.secondary)
+                    Button("Save profile") { Task { await model.updateProfile(displayName: displayName, bio: bio) } }
+                }
+                Section("Your activity") {
+                    LabeledContent("Posts", value: "\(model.posts.filter { $0.authorId == model.userId }.count)")
+                    LabeledContent("Projects", value: "\(model.projects.filter { $0.id.isEmpty == false }.count)")
+                }
+                Section {
+                    Button("Sign out", role: .destructive) { model.signOut() }
+                }
+            }
+            .navigationTitle("Profile")
+            .task {
+                await model.loadDirectory()
+                displayName = model.currentProfile?.display_name ?? ""
+                bio = model.currentProfile?.bio ?? ""
+            }
         }
     }
 }
