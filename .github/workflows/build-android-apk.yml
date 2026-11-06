@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - native/complete-social-app-phase-1-auth
     paths:
       - "native/android/**"
       - ".github/workflows/build-android-apk.yml"
