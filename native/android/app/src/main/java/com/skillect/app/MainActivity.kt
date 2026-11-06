@@ -28,8 +28,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
 
-private val Blue = Color(0xFF315CF5)
-private val Ink = Color(0xFF15213B)
+private val Blue = Color(0xFF00C878)
+private val Ink = Color(0xFFF2F2F2)
+private val SkillectBlack = Color(0xFF050509)
+private val MutedNav = Color(0xFF77748C)
 private val client = OkHttpClient()
 private const val URL = BuildConfig.SUPABASE_URL
 private const val KEY = BuildConfig.SUPABASE_KEY
@@ -42,7 +44,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val prefs = getSharedPreferences("skillect-session", MODE_PRIVATE)
         setContent {
-            MaterialTheme(colorScheme = lightColorScheme(primary = Blue, background = Color.White)) {
+            MaterialTheme(colorScheme = darkColorScheme(primary = Blue, background = SkillectBlack, surface = SkillectBlack)) {
                 SkillectApp(
                     initialToken = prefs.getString("token", null),
                     onToken = { token -> prefs.edit().putString("token", token).apply() },
@@ -306,19 +308,30 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         }
     } else {
         Scaffold(
-            topBar={ Row(Modifier.fillMaxWidth().background(Color.White).padding(horizontal=20.dp,vertical=16.dp),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
-                Text("Skillect",color=Blue,fontWeight=FontWeight.ExtraBold,fontSize=25.sp)
-                Row { TextButton(onClick={scope.launch{loadNotifications();tab="Notifications"}}){Text("Alerts")}; TextButton(onClick={token=null;onSignOut()}){Text("Sign out")} }
+            topBar={ Row(Modifier.fillMaxWidth().height(72.dp).background(SkillectBlack).padding(horizontal=22.dp),verticalAlignment=Alignment.CenterVertically) {
+                Box(Modifier.size(42.dp).background(Color(0xFF101018),RoundedCornerShape(12.dp)),contentAlignment=Alignment.Center) {
+                    Text("s",color=Blue,fontSize=34.sp,fontWeight=FontWeight.Bold)
+                }
+                Text("Skillect",color=Blue,fontWeight=FontWeight.ExtraBold,fontSize=25.sp,modifier=Modifier.padding(start=14.dp))
             }},
             bottomBar={
-                NavigationBar(containerColor=Color.White) {
-                    listOf("Feed","Explore","Create","Projects","Profile").forEach { item ->
-                        NavigationBarItem(selected=tab==item,onClick={tab=item},icon={Text(when(item){"Feed"->"⌂";"Explore"->"⌕";"Create"->"+";"Projects"->"▣";else->"◉"})},label={Text(item)})
+                NavigationBar(containerColor=SkillectBlack,contentColor=MutedNav,tonalElevation=0.dp) {
+                    listOf("Feed","Explore","Communities","Create","Messages","Profile").forEach { item ->
+                        NavigationBarItem(
+                            selected=tab==item,
+                            onClick={
+                                tab=item
+                                if(item=="Communities") scope.launch { loadCommunities() }
+                            },
+                            icon={Text(when(item){"Feed"->"⌂";"Explore"->"◈";"Communities"->"♧";"Create"->"⊞";"Messages"->"○";else->"♙"},fontSize=25.sp)},
+                            label={Text(item,fontSize=10.sp)},
+                            colors=NavigationBarItemDefaults.colors(selectedIconColor=Blue,selectedTextColor=Blue,unselectedIconColor=MutedNav,unselectedTextColor=MutedNav,indicatorColor=SkillectBlack)
+                        )
                     }
                 }
             }
         ) { padding ->
-            Column(Modifier.fillMaxSize().background(Color(0xFFF8FAFF)).padding(padding)) {
+            Column(Modifier.fillMaxSize().background(SkillectBlack).padding(padding)) {
                 error?.let { Text(it,color=Color.Red,modifier=Modifier.padding(horizontal=16.dp,vertical=6.dp)) }
                 when(tab) {
                     "Feed" -> {
@@ -326,7 +339,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                             Text("Your learning feed",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
                             TextButton(onClick={scope.launch{loadFeed()}}){Text("Refresh")}
                         }
-                        if(posts.isEmpty()) Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Text("Your feed is ready for your first idea.",color=Color.Gray)}
+                        if(posts.isEmpty()) Spacer(Modifier.fillMaxSize())
                         else LazyColumn(contentPadding=PaddingValues(14.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                             items(posts,key={it.id}) { post ->
                                 Card(colors=CardDefaults.cardColors(containerColor=Color.White),shape=RoundedCornerShape(18.dp),modifier=Modifier.fillMaxWidth()) {
@@ -374,6 +387,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         Text("Posts: ${posts.count{it.authorId==userId}}",modifier=Modifier.padding(top=14.dp))
                         TextButton(onClick={scope.launch{loadFeed()}}){Text("Refresh profile")}
                     }
+                    "Messages" -> Spacer(Modifier.fillMaxSize())
                     "Communities" -> LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
                         item { Text("Communities",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink) }
                         items(communities){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);Button(onClick={scope.launch{joinCommunity(item.id)}},modifier=Modifier.padding(top=6.dp)){Text("Join")}}} }
