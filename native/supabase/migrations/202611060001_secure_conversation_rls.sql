@@ -3,6 +3,20 @@
 
 begin;
 
+-- Harden the existing timestamp trigger against mutable search_path resolution.
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+set search_path = ''
+as $
+begin
+  new.updated_at := pg_catalog.now();
+  return new;
+end;
+$;
+
+revoke all on function public.set_updated_at() from public, anon, authenticated;
+
 -- The live database already has an auth.users trigger calling public.handle_new_user().
 -- Replace that function in place; do not add a second trigger, which would attempt
 -- a duplicate profiles insert for each signup.
