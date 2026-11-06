@@ -52,6 +52,7 @@ Skillect is an India-first social platform for teenagers to share learning, skil
 
 - `.github/workflows/native-android.yml` builds a debug APK for CI. Its manual `signed-release` mode builds APK and AAB only after the signing secrets are configured; manual runs default to signed-release.
 - `.github/workflows/native-ios.yml` builds an unsigned Release-configuration iOS Simulator app ZIP. This is not an App Store IPA.
+- `.github/workflows/native-ios-signed-release.yml` can archive and export a signed IPA when the Apple signing secrets below are configured. It does not upload the IPA to App Store Connect.
 - CI artifacts expire after 14 days and are not store releases.
 
 ## Required configuration
@@ -78,9 +79,15 @@ GitHub Actions secrets: `FIREBASE_API_KEY`, `FIREBASE_APP_ID`, `FIREBASE_PROJECT
 
 Supabase Edge Function secret: `FIREBASE_SERVICE_ACCOUNT_JSON`.
 
-### iOS distribution
+### iOS distribution (GitHub Actions secrets)
 
-Requires an Apple Developer team, distribution certificate, provisioning profile, and App Store Connect setup.
+- `APPLE_TEAM_ID`
+- `IOS_DISTRIBUTION_CERTIFICATE_BASE64` (Apple Distribution `.p12`, base64 encoded)
+- `IOS_DISTRIBUTION_CERTIFICATE_PASSWORD`
+- `IOS_PROVISIONING_PROFILE_BASE64` (App Store provisioning profile, base64 encoded)
+- `IOS_KEYCHAIN_PASSWORD` (temporary CI keychain password)
+
+After configuring these, run **Native iOS signed release** from GitHub Actions. It creates a signed IPA artifact for manual upload through Transporter or App Store Connect. An Apple Developer membership and valid App Store provisioning profile are required.
 
 ## Package identifiers
 
