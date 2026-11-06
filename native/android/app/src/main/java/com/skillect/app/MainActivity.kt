@@ -791,6 +791,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         Button(onClick={scope.launch{updateProfile()}}){Text("Save profile")}
                         Text("Posts: ${posts.count{it.authorId==userId}}",modifier=Modifier.padding(top=14.dp))
                         TextButton(onClick={scope.launch{loadFeed()}}){Text("Refresh profile")}
+                        TextButton(onClick={token=null;userId=null;onSignOut()}){Text("Sign out",color=Color.Red)}
                     }
                     "Messages" -> Column(Modifier.fillMaxSize().padding(16.dp)) {
                         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
