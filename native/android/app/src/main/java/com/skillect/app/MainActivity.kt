@@ -1,7 +1,7 @@
 package com.skillect.app
 
 import android.os.Bundle
-import android.net.Uri
+import android.net.Uri\nimport android.util.Base64
 import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -45,7 +45,7 @@ private const val KEY = BuildConfig.SUPABASE_KEY
 
 data class Post(val id: String, val authorId: String, val body: String, val author: String, val handle: String, val image: String?, val likes: Int, val comments: Int)
 data class SimpleItem(val id: String, val title: String, val detail: String)
-data class ChatMessage(val id:String,val senderId:String,val content:String)
+data class ChatMessage(val id:String,val senderId:String,val content:String)\ndata class ModerationRow(val id:String,val title:String,val detail:String,val targetId:String,val targetType:String,val reason:String)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,7 +73,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     var usernameInput by remember { mutableStateOf("") }
     var authMode by remember { mutableStateOf("Sign in") }
     var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }\n    var isModerator by remember { mutableStateOf(false) }\n    var moderationReports by remember { mutableStateOf<List<ModerationRow>>(emptyList()) }\n    var moderationAppeals by remember { mutableStateOf<List<ModerationRow>>(emptyList()) }
     var posts by remember { mutableStateOf<List<Post>>(emptyList()) }
     var likedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var savedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -105,11 +105,62 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     var commentText by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
+
+    suspend fun loadModerationQueue() {
+        val active=token ?: return
+        if(!isModerator) { error="Moderator access is required."; return }
+        try {
+            val reports=apiArray("/rest/v1/reports?select=id,target_type,target_id,reason,details,status&status=eq.pending&order=created_at.asc&limit=100",active)
+            moderationReports=(0 until reports.length()).map { i ->
+                val r=reports.getJSONObject(i)
+                ModerationRow(r.optString("id"),r.optString("target_type")+" · "+r.optString("reason"),r.optString("details"),r.optString("target_id"),r.optString("target_type"),r.optString("reason"))
+            }
+            val appeals=apiArray("/rest/v1/moderation_appeals?select=id,user_id,enforcement_user_id,explanation,status&status=in.(pending,under_review)&order=created_at.asc&limit=100",active)
+            moderationAppeals=(0 until appeals.length()).map { i ->
+                val r=appeals.getJSONObject(i)
+                ModerationRow(r.optString("id"),"Appeal · "+r.optString("status"),r.optString("explanation"),r.optString("enforcement_user_id"),"account",r.optString("user_id"))
+            }
+            error=null
+        } catch(e:Exception) { error=e.message }
+    }
+
+    suspend fun resolveModerationReport(row:ModerationRow) {
+        val active=token ?: return
+        try {
+            api("PATCH","/rest/v1/reports?id=eq."+row.id,active,JSONObject().put("status","resolved"))
+            loadModerationQueue()
+        } catch(e:Exception) { error=e.message }
+    }
+
+    suspend fun banReportedAccount(row:ModerationRow) {
+        val active=token ?: return
+        val moderator=userId ?: return
+        try {
+            var target=row.targetId
+            if(row.targetType=="post") {
+                val post=apiArray("/rest/v1/posts?select=author_id&id=eq."+row.targetId+"&limit=1",active)
+                target=post.optJSONObject(0)?.optString("author_id") ?: error("Could not identify post author")
+            }
+            api("POST","/rest/v1/account_enforcements",active,JSONObject().put("user_id",target).put("status","permanent").put("reason","Moderator action from report: "+row.reason).put("issued_by",moderator))
+            resolveModerationReport(row)
+        } catch(e:Exception) { error=e.message }
+    }
+
+    suspend fun reviewModerationAppeal(row:ModerationRow, accept:Boolean) {
+        val active=token ?: return
+        val moderator=userId ?: return
+        try {
+            api("PATCH","/rest/v1/moderation_appeals?id=eq."+row.id,active,JSONObject().put("status",if(accept)"accepted" else "rejected").put("reviewed_by",moderator).put("reviewed_at",java.time.Instant.now().toString()).put("moderator_note",if(accept)"Appeal accepted by moderator" else "Appeal rejected by moderator"))
+            if(accept) api("DELETE","/rest/v1/account_enforcements?user_id=eq."+row.targetId,active)
+            loadModerationQueue()
+        } catch(e:Exception) { error=e.message }
+    }
+
     suspend fun loadUser() {
         val active = token ?: return
         try {
             val u = api("GET", "/auth/v1/user", active)
-            userId = u.optString("id").takeIf { it.isNotBlank() }
+            userId = u.optString("id").takeIf { it.isNotBlank() }\n            isModerator = hasModeratorRole(active)
             val id = userId ?: return
             val enforcement = apiArray("/rest/v1/account_enforcements?select=status,reason&user_id=eq.$id&limit=1", active)
             if (enforcement.length() > 0) {
@@ -452,14 +503,14 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             }},
             bottomBar={
                 NavigationBar(containerColor=SkillectBlack,contentColor=MutedNav,tonalElevation=0.dp) {
-                    listOf("Feed","Explore","Communities","Create","Messages","Notifications","Profile").forEach { item ->
+                    (listOf("Feed","Explore","Communities","Create","Messages","Notifications","Profile") + if(isModerator) listOf("Moderation") else emptyList()).forEach { item ->
                         NavigationBarItem(
                             selected=tab==item,
                             onClick={
                                 tab=item
-                                if(item=="Communities") scope.launch { loadCommunities() }; if(item=="Notifications") scope.launch { loadNotifications() }
+                                if(item=="Communities") scope.launch { loadCommunities() }; if(item=="Notifications") scope.launch { loadNotifications() }; if(item=="Moderation") scope.launch { loadModerationQueue() }
                             },
-                            icon={Text(when(item){"Feed"->"⌂";"Explore"->"◈";"Communities"->"♧";"Create"->"⊞";"Messages"->"○";"Notifications"->"♧";else->"♙"},fontSize=25.sp)},
+                            icon={Text(when(item){"Feed"->"⌂";"Explore"->"◈";"Communities"->"♧";"Create"->"⊞";"Messages"->"○";"Notifications"->"♧";"Moderation"->"⚑";else->"♙"},fontSize=25.sp)},
                             label={Text(item,fontSize=10.sp)},
                             colors=NavigationBarItemDefaults.colors(selectedIconColor=Blue,selectedTextColor=Blue,unselectedIconColor=MutedNav,unselectedTextColor=MutedNav,indicatorColor=SkillectBlack)
                         )
@@ -470,6 +521,44 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             Column(Modifier.fillMaxSize().background(SkillectBlack).padding(padding)) {
                 error?.let { Text(it,color=Color.Red,modifier=Modifier.padding(horizontal=16.dp,vertical=6.dp)) }
                 when(tab) {
+
+                    "Moderation" -> {
+                        Row(Modifier.fillMaxWidth().padding(16.dp),horizontalArrangement=Arrangement.SpaceBetween) {
+                            Text("Safety moderation",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
+                            TextButton(onClick={scope.launch{loadModerationQueue()}}){Text("Refresh")}
+                        }
+                        LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(12.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+                            item { Text("Pending reports",fontWeight=FontWeight.Bold,color=Ink) }
+                            if(moderationReports.isEmpty()) item { Text("No pending reports",color=Color.Gray) }
+                            items(moderationReports,key={"report-"+it.id}) { row ->
+                                Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=Color(0xFF171720))) {
+                                    Column(Modifier.padding(14.dp)) {
+                                        Text(row.title,fontWeight=FontWeight.Bold,color=Ink)
+                                        if(row.detail.isNotBlank()) Text(row.detail,color=Color.Gray)
+                                        Text("Target: "+row.targetId,fontSize=11.sp,color=Color.Gray)
+                                        Row {
+                                            TextButton(onClick={scope.launch{resolveModerationReport(row)}}){Text("Resolve")}
+                                            TextButton(onClick={scope.launch{banReportedAccount(row)}}){Text("Permanently ban",color=Color.Red)}
+                                        }
+                                    }
+                                }
+                            }
+                            item { Text("Appeals",fontWeight=FontWeight.Bold,color=Ink,modifier=Modifier.padding(top=12.dp)) }
+                            if(moderationAppeals.isEmpty()) item { Text("No pending appeals",color=Color.Gray) }
+                            items(moderationAppeals,key={"appeal-"+it.id}) { row ->
+                                Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=Color(0xFF171720))) {
+                                    Column(Modifier.padding(14.dp)) {
+                                        Text(row.title,fontWeight=FontWeight.Bold,color=Ink)
+                                        Text(row.detail,color=Ink)
+                                        Row {
+                                            TextButton(onClick={scope.launch{reviewModerationAppeal(row,true)}}){Text("Accept and lift ban")}
+                                            TextButton(onClick={scope.launch{reviewModerationAppeal(row,false)}}){Text("Reject",color=Color.Red)}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     "Feed" -> {
                         Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=10.dp),horizontalArrangement=Arrangement.SpaceBetween) {
                             Text("Your learning feed",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
@@ -594,6 +683,16 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     }
 }
 
+
+
+private fun hasModeratorRole(token:String):Boolean {
+    return try {
+        val payload=token.split(".").getOrNull(1) ?: return false
+        val decoded=String(Base64.decode(payload,Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING),Charsets.UTF_8)
+        val metadata=JSONObject(decoded).optJSONObject("app_metadata") ?: return false
+        metadata.optString("role") in listOf("moderator","admin")
+    } catch(_:Exception) { false }
+}
 
 private suspend fun uploadPostMedia(context:Context, uri:Uri, token:String, userId:String):String = withContext(Dispatchers.IO) {
     val mime=context.contentResolver.getType(uri) ?: "image/jpeg"
