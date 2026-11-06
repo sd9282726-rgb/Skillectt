@@ -458,7 +458,7 @@ final class AppModel: ObservableObject {
             }
             let projectData = try await request(path: "/rest/v1/projects?select=id,title,description,status&order=created_at.desc&limit=100")
             projects = try JSONDecoder().decode([NativeProject].self, from: projectData)
-            let communityData = try await request(path: "/rest/v1/communities?select=id,name,description,member_count&order=created_at.desc&limit=100")
+            let communityData = try await request(path: "/rest/v1/communities?select=id,name,description,member_count&created_by=not.is.null&order=created_at.desc&limit=100")
             communities = try JSONDecoder().decode([NativeCommunity].self, from: communityData)
             if let me = userId {
                 let memberData = try await request(path: "/rest/v1/community_members?select=community_id&user_id=eq.\(me)")
