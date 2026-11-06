@@ -93,6 +93,7 @@ final class AppModel: ObservableObject {
     @Published var likedIds: Set<String> = []
     @Published var savedIds: Set<String> = []
     @Published var comments: [FeedComment] = []
+    @Published var activeCommentsPostId: String?
     @Published var directory: [DirectoryProfile] = []
     @Published var followingIds: Set<String> = []
     @Published var projects: [NativeProject] = []
@@ -736,6 +737,7 @@ final class AppModel: ObservableObject {
                     await loadDirectory()
                     await loadConversations()
                     if let conversationId = activeConversationId { await loadChatMessages(conversationId) }
+                    if let postId = activeCommentsPostId { await loadComments(postId: postId) }
                 }
             } catch {
                 // Reconnect after network loss or app backgrounding.
