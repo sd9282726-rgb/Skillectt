@@ -167,11 +167,17 @@ final class AppModel: ObservableObject {
             moderationReports = try JSONDecoder().decode([ModerationReport].self, from: reports)
             for index in moderationReports.indices.prefix(25) {
                 let report = moderationReports[index]
-                let table = report.target_type == "post" ? "posts" : (report.target_type == "comment" ? "comments" : "")
-                if !table.isEmpty {
-                    let contentData = try await request(path: "/rest/v1/\(table)?select=content&id=eq.\(report.target_id)&limit=1")
-                    let contentRows = try JSONSerialization.jsonObject(with: contentData) as? [[String: String]] ?? []
-                    if let content = contentRows.first?["content"] { moderationReports[index].details = "Reported content: " + content }
+                if report.target_type == "message" {
+                    let evidenceData = try await request(path: "/rest/v1/moderation_evidence?select=content_snapshot&report_id=eq.\(report.id)&limit=1")
+                    let evidenceRows = try JSONSerialization.jsonObject(with: evidenceData) as? [[String: String]] ?? []
+                    if let content = evidenceRows.first?["content_snapshot"] { moderationReports[index].details = "Reported message: " + content }
+                } else {
+                    let table = report.target_type == "post" ? "posts" : (report.target_type == "comment" ? "comments" : "")
+                    if !table.isEmpty {
+                        let contentData = try await request(path: "/rest/v1/\(table)?select=content&id=eq.\(report.target_id)&limit=1")
+                        let contentRows = try JSONSerialization.jsonObject(with: contentData) as? [[String: String]] ?? []
+                        if let content = contentRows.first?["content"] { moderationReports[index].details = "Reported content: " + content }
+                    }
                 }
             }
             let appeals = try await request(path: "/rest/v1/moderation_appeals?select=id,user_id,enforcement_user_id,explanation,status,created_at&status=in.(pending,under_review)&order=created_at.asc&limit=100")
