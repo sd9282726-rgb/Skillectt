@@ -163,7 +163,7 @@ final class AppModel: ObservableObject {
     func loadModerationQueue() async {
         guard isModerator else { errorMessage = "Moderator access is required."; return }
         do {
-            let reports = try await request(path: "/rest/v1/reports?select=id,reporter_id,target_type,target_id,reason,details,status,created_at&status=eq.pending&order=created_at.asc&limit=100")
+            let reports = try await request(path: "/rest/v1/reports?select=id,reporter_id,target_type,target_id,target_user_id,reason,details,status,created_at&status=eq.pending&order=created_at.asc&limit=100")
             moderationReports = try JSONDecoder().decode([ModerationReport].self, from: reports)
             for index in moderationReports.indices.prefix(25) {
                 let report = moderationReports[index]
@@ -212,8 +212,8 @@ final class AppModel: ObservableObject {
     func permanentlyBanReportedUser(_ report: ModerationReport) async {
         guard isModerator, let moderatorId = userId else { return }
         do {
-            var targetUserId = report.target_id
-            if report.target_type == "post" || report.target_type == "comment" {
+            var targetUserId = report.target_user_id ?? report.target_id
+            if report.target_user_id == nil && (report.target_type == "post" || report.target_type == "comment") {
                 let table = report.target_type == "post" ? "posts" : "comments"
                 let data = try await request(path: "/rest/v1/\(table)?select=author_id&id=eq.\(report.target_id)&limit=1")
                 let rows = try JSONSerialization.jsonObject(with: data) as? [[String: String]] ?? []
@@ -442,6 +442,16 @@ final class AppModel: ObservableObject {
         } catch { errorMessage = error.localizedDescription }
     }
 
+
+
+    func reportMessage(_ message: NativeChatMessage) async {
+        guard let me = userId, message.sender_id != me else { return }
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["reporter_id": me, "target_type": "message", "target_id": message.id, "target_user_id": message.sender_id, "reason": "inappropriate_message"])
+            _ = try await request(path: "/rest/v1/reports", method: "POST", body: body, prefer: "return=minimal")
+            errorMessage = "Message reported for moderator review."
+        } catch { errorMessage = error.localizedDescription }
+    }
 
     func reportComment(_ commentId: String, reason: String = "inappropriate_content") async {
         guard let me = userId else { return }
