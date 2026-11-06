@@ -74,6 +74,9 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     var displayName by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var bio by remember { mutableStateOf("") }
+    var projectTitle by remember { mutableStateOf("") }
+    var projectDescription by remember { mutableStateOf("") }
+    var notifications by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
     var showCommentsFor by remember { mutableStateOf<String?>(null) }
     var comments by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
     var commentText by remember { mutableStateOf("") }
@@ -127,6 +130,54 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             val arr = apiArray("/rest/v1/communities?select=id,name,description,member_count&order=created_at.desc&limit=40", active)
             communities = (0 until arr.length()).map { val p=arr.getJSONObject(it); SimpleItem(p.optString("id"),p.optString("name"),p.optString("description")) }
         } catch (e: Exception) { error=e.message }
+    }
+
+
+    suspend fun createProject() {
+        val active = token ?: return
+        val me = userId ?: return
+        if (projectTitle.isBlank() || projectDescription.isBlank()) return
+        try {
+            api("POST", "/rest/v1/projects", active, JSONObject().put("author_id", me).put("title", projectTitle.trim()).put("description", projectDescription.trim()).put("status", "in_progress"))
+            projectTitle = ""
+            projectDescription = ""
+            loadProjects()
+        } catch (e: Exception) { error = e.message }
+    }
+
+    suspend fun joinCommunity(id: String) {
+        val active = token ?: return
+        val me = userId ?: return
+        try {
+            api("POST", "/rest/v1/community_members", active, JSONObject().put("community_id", id).put("user_id", me))
+            error = null
+        } catch (e: Exception) { error = e.message }
+    }
+
+    suspend fun updateProfile() {
+        val active = token ?: return
+        val me = userId ?: return
+        try {
+            api("PATCH", "/rest/v1/profiles?id=eq.$me", active, JSONObject().put("display_name", displayName).put("bio", bio))
+            loadUser()
+        } catch (e: Exception) { error = e.message }
+    }
+
+    suspend fun loadNotifications() {
+        val active = token ?: return
+        val me = userId ?: return
+        try {
+            val arr = apiArray("/rest/v1/notifications?select=id,type,message&user_id=eq.$me&order=created_at.desc&limit=50", active)
+            notifications = (0 until arr.length()).map { val p = arr.getJSONObject(it); SimpleItem(p.optString("id"), p.optString("type"), p.optString("message")) }
+        } catch (e: Exception) { error = e.message }
+    }
+
+    suspend fun markNotificationRead(id: String) {
+        val active = token ?: return
+        try {
+            api("PATCH", "/rest/v1/notifications?id=eq.$id", active, JSONObject().put("read", true))
+            loadNotifications()
+        } catch (e: Exception) { error = e.message }
     }
 
     suspend fun searchPeople() {
@@ -237,7 +288,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         Scaffold(
             topBar={ Row(Modifier.fillMaxWidth().background(Color.White).padding(horizontal=20.dp,vertical=16.dp),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
                 Text("Skillect",color=Blue,fontWeight=FontWeight.ExtraBold,fontSize=25.sp)
-                TextButton(onClick={token=null;onSignOut()}){Text("Sign out")}
+                Row { TextButton(onClick={scope.launch{loadNotifications();tab="Notifications"}}){Text("Alerts")}; TextButton(onClick={token=null;onSignOut()}){Text("Sign out")} }
             }},
             bottomBar={
                 NavigationBar(containerColor=Color.White) {
@@ -285,22 +336,31 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         OutlinedTextField(createText,{createText=it},label={Text("What are you learning or building?")},modifier=Modifier.fillMaxWidth().heightIn(min=150.dp),maxLines=8)
                         Button(onClick={scope.launch{createPost()}},enabled=createText.isNotBlank()&&!busy,modifier=Modifier.padding(top=12.dp)){Text(if(busy)"Publishing…" else "Publish post")}
                     }
-                    "Projects" -> LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
-                        item { Text("Projects & builds",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink) }
-                        items(projects){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray)}} }
-                        item { TextButton(onClick={scope.launch{loadCommunities();tab="Communities"}}){Text("Explore communities")} }
+                    "Projects" -> Column(Modifier.fillMaxSize().padding(16.dp)) {
+                        Text("Projects & builds",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
+                        OutlinedTextField(projectTitle,{projectTitle=it},label={Text("Project title")},modifier=Modifier.fillMaxWidth())
+                        OutlinedTextField(projectDescription,{projectDescription=it},label={Text("What are you building?")},modifier=Modifier.fillMaxWidth(),maxLines=4)
+                        Button(onClick={scope.launch{createProject()}},enabled=projectTitle.isNotBlank()&&projectDescription.isNotBlank()){Text("Add project")}
+                        LazyColumn { items(projects){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray)}} } }
+                        TextButton(onClick={scope.launch{loadCommunities();tab="Communities"}}){Text("Explore communities")}
                     }
                     "Profile" -> Column(Modifier.fillMaxSize().padding(20.dp)) {
                         Text(displayName.ifBlank{"Your profile"},fontSize=25.sp,fontWeight=FontWeight.Bold,color=Ink)
                         Text("@$username",color=Color.Gray)
-                        Text(bio.ifBlank{"Add your bio on the existing profile editor"},modifier=Modifier.padding(top=12.dp))
+                        OutlinedTextField(displayName,{displayName=it},label={Text("Display name")},modifier=Modifier.fillMaxWidth())
+                        OutlinedTextField(bio,{bio=it},label={Text("Bio")},modifier=Modifier.fillMaxWidth(),maxLines=4)
+                        Button(onClick={scope.launch{updateProfile()}}){Text("Save profile")}
                         Text("Posts: ${posts.count{it.authorId==userId}}",modifier=Modifier.padding(top=14.dp))
                         TextButton(onClick={scope.launch{loadFeed()}}){Text("Refresh profile")}
-                        TextButton(onClick={scope.launch{loadCommunities();tab="Communities"}}){Text("Communities")}
                     }
                     "Communities" -> LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
                         item { Text("Communities",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink) }
-                        items(communities){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray)}} }
+                        items(communities){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);Button(onClick={scope.launch{joinCommunity(item.id)}},modifier=Modifier.padding(top=6.dp)){Text("Join")}}} }
+                    }
+                    "Notifications" -> LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
+                        item { Text("Notifications",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink) }
+                        item { TextButton(onClick={scope.launch{loadNotifications()}}){Text("Refresh")} }
+                        items(notifications){ item -> Card(Modifier.fillMaxWidth().padding(vertical=5.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);TextButton(onClick={scope.launch{markNotificationRead(item.id)}}){Text("Mark read")}}} }
                     }
                 }
             }
