@@ -122,7 +122,8 @@ begin
     nullif(to_jsonb(new) ->> 'author_id','')::uuid,
     nullif(to_jsonb(new) ->> 'sender_id','')::uuid,
     nullif(to_jsonb(new) ->> 'follower_id','')::uuid,
-    nullif(to_jsonb(new) ->> 'user_id','')::uuid
+    nullif(to_jsonb(new) ->> 'user_id','')::uuid,
+    nullif(to_jsonb(new) ->> 'id','')::uuid
   );
   if actor is not null and exists (
     select 1 from public.account_enforcements e
@@ -199,5 +200,55 @@ create policy "Moderators can update reports"
 on public.reports for update to authenticated
 using (private.is_moderator())
 with check (private.is_moderator());
+
+-- Extend account restrictions to profile edits, likes, saves, and projects.
+drop trigger if exists enforce_profile_account_status on public.profiles;
+create trigger enforce_profile_account_status before update on public.profiles
+for each row execute function private.reject_enforced_account_activity();
+drop trigger if exists enforce_post_likes_account_status on public.post_likes;
+create trigger enforce_post_likes_account_status before insert or update on public.post_likes
+for each row execute function private.reject_enforced_account_activity();
+drop trigger if exists enforce_saved_posts_account_status on public.saved_posts;
+create trigger enforce_saved_posts_account_status before insert or update on public.saved_posts
+for each row execute function private.reject_enforced_account_activity();
+drop trigger if exists enforce_projects_account_status on public.projects;
+create trigger enforce_projects_account_status before insert or update on public.projects
+for each row execute function private.reject_enforced_account_activity();
+
+-- Every ban, suspension, and removal is recorded in the moderation audit log.
+create or replace function private.audit_account_enforcement_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $
+declare
+  actor uuid;
+  target uuid;
+  action_name text;
+  action_reason text;
+begin
+  if tg_op = 'DELETE' then
+    target := old.user_id;
+    actor := auth.uid();
+    action_name := 'enforcement_removed';
+    action_reason := old.reason;
+  else
+    target := new.user_id;
+    actor := new.issued_by;
+    action_name := case when new.status = 'permanent' then 'permanent_ban' else 'account_suspension' end;
+    action_reason := new.reason;
+  end if;
+  insert into public.moderation_actions(moderator_id,target_user_id,target_type,target_id,action,reason)
+  values(actor,target,'account',target,action_name,action_reason);
+  if tg_op = 'DELETE' then return old; end if;
+  return new;
+end;
+$;
+revoke all on function private.audit_account_enforcement_change() from public, anon, authenticated;
+drop trigger if exists audit_account_enforcement_changes on public.account_enforcements;
+create trigger audit_account_enforcement_changes
+after insert or update or delete on public.account_enforcements
+for each row execute function private.audit_account_enforcement_change();
 
 commit;
