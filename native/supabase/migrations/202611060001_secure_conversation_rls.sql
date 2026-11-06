@@ -42,7 +42,7 @@ begin
 end;
 $$;
 
-revoke all on function public.handle_new_user() from public;
+revoke all on function public.handle_new_user() from public, anon;
 revoke all on function public.handle_new_user() from anon;
 revoke all on function public.handle_new_user() from authenticated;
 
@@ -70,7 +70,7 @@ as $$
   );
 $$;
 
-revoke all on function public.is_conversation_participant(uuid) from public;
+revoke all on function public.is_conversation_participant(uuid) from public, anon;
 grant execute on function public.is_conversation_participant(uuid) to authenticated;
 
 drop policy if exists "Participants visible to members" on public.conversation_participants;
