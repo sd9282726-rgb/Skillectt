@@ -23,9 +23,12 @@ This plan tracks implementation in the native Kotlin/Jetpack Compose Android app
 - [ ] Profile deep links and private-account behavior.
 
 ## Phase 3 — Feed and publishing
-- [ ] Text + image post creation and image selection/upload are implemented on Android and iOS (awaiting CI and end-to-end verification). Video attachments remain.
+- [x] Text-only post creation is implemented on Android and iOS.
+- [x] Photo publishing is intentionally paused in both clients until server-side screening credentials and integration tests are complete. No direct upload fallback is available.
+- [ ] Video attachments and playback remain unimplemented.
 - [ ] Feed pagination, refresh, post detail, comments/replies, likes, saves.
-- [ ] Supabase Storage image upload uses the authenticated user's folder and a 12 MB image limit; server-side bucket limits are in the pending migration. Upload progress and end-to-end verification remain.
+- [x] Direct client writes to the public image bucket are disabled; the private quarantine bucket and 12 MB MIME/size limits are deployed.
+- [ ] Image screening provider credentials and full upload test remain.
 - [ ] Video playback, image/video caching, retry, and offline/error states.
 - [ ] Feed ranking uses real content and explicit empty states.
 
@@ -40,11 +43,12 @@ This plan tracks implementation in the native Kotlin/Jetpack Compose Android app
 - [x] Start a one-to-one conversation from Explore and add both participants (requires the pending conversation RLS migration).
 - [x] Send and load messages through Supabase REST on both platforms (basic implementation; no realtime delivery, pagination, or unread counts yet).
 - [ ] Block/report behavior inside conversations and participant-only authorization verification.
-- [ ] Test RLS for users outside a conversation; the current production policies were found to contain invalid membership predicates, so messaging must remain disabled for public release until migration 0001 is applied and verified in staging.
+- [x] Production conversation RLS is repaired: participants only, sender identity enforced, and blocks prevent message sending.
+- [ ] Verify with two separate real accounts and a third non-participant before public release.
 
 ## Phase 6 — Notifications
 - [x] Notifications inbox is reachable from Android navigation and iOS tab bar; both clients load the user's real notification rows and support marking read.
-- [ ] Event triggers for follow/like/comment notifications are prepared in a pending migration; apply and test in staging before production.
+- [ ] Notification event triggers, delivery fan-out, and realtime refresh still need end-to-end verification.
 - [ ] Deep links, pagination, realtime refresh, and notification preferences.
 - [ ] Push registration and delivery (FCM/APNs), permission prompts, and delivery testing. Requires Firebase/APNs project configuration and server-side credentials.
 
@@ -57,10 +61,12 @@ This plan tracks implementation in the native Kotlin/Jetpack Compose Android app
 - [x] Database enforcement blocks restricted accounts from posting, commenting, messaging, following, and joining communities.
 - [x] Moderator-only report review policies, permanent/suspension records, moderation audit records, and user appeals schema are deployed.
 - [x] New image posts require an approved media record; direct authenticated uploads are disabled until a server-side screening gateway is configured.
-- [ ] Operational moderator dashboard and evidence-handling workflow are not yet implemented.
+- [x] Native moderator dashboard added to Android and iOS for report review, post/comment hiding, permanent bans, and appeal decisions (CI and live moderator-account verification pending).
+- [x] Restricted-account appeal-only screen added to Android and iOS.
+- [ ] Full evidence retention, case history, and human moderation operations remain.
 - [x] A fail-closed image moderation Edge Function is deployed; it quarantines uploads privately and only publishes images after a successful nudity scan and an approved database record.
 - [ ] Sightengine credentials are not configured; image publishing remains paused in both apps until the provider is configured and the gateway is tested.
 - [ ] Video and text screening, specialist child-safety detection, and human review procedures remain unimplemented.
 
 ## Current status
-Phase 1 auth UI/API calls, Phase 2 follow/community-membership slices, native notification inbox, and basic direct-message screens/send/load flows are present on the feature branch. Android debug build passed for the latest messaging commit; iOS simulator CI is queued. Notifications triggers/device-token registry and secure conversation/storage policies are staged migrations, not applied to production. No remote FCM/APNs push, realtime messaging, video/text/child-safety screening, moderator dashboard, signed release build, or full end-to-end device test is claimed. The image gateway is deployed but unavailable until its provider secrets are set. Image publishing is fail-closed pending a configured moderation provider. Existing production conversation RLS predicates were confirmed unsafe; do not enable messaging publicly until migration 0001 is staged, applied, and verified. All remaining features stay incomplete until tested.
+Native auth, follow/community membership, notification inbox, basic direct messaging, moderator queue, account restrictions, and appeals are present on the feature branch. Production conversation RLS, device-token registry, account enforcement, moderator policies, hidden-content policies, private media quarantine, and storage restrictions have been applied and verified at the schema/policy level. The image moderation Edge Function is deployed but cannot accept uploads until its provider credentials are configured; photo publishing remains disabled in both clients. Android/iOS build runs are pending or have been cancelled during rapid commits; no successful build of the latest moderator/appeal UI is claimed yet. Remote push delivery, realtime chat, unread counts, video playback/upload, text/grooming screening, specialist child-safety detection, full moderator evidence workflow, signed releases, and real-device E2E remain incomplete. The PR must remain draft until these are tested.
