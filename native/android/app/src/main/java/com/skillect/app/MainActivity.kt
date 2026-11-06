@@ -510,7 +510,7 @@ private suspend fun uploadPostMedia(context:Context, uri:Uri, token:String, user
         .addHeader("Authorization","Bearer $token")
         .addHeader("Content-Type",mime)
         .addHeader("x-upsert","false")
-        .put(bytes.toRequestBody(mime.toMediaType()))
+        .post(bytes.toRequestBody(mime.toMediaType()))
         .build()
     client.newCall(request).execute().use { response ->
         val text=response.body?.string().orEmpty()
