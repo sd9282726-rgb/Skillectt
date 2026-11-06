@@ -130,7 +130,13 @@ Deno.serve(async (request: Request) => {
 
   const publicUrl = `${supabaseUrl}/storage/v1/object/public/post-media/${objectPath}`;
   const saved = await registerAsset(supabaseUrl, serviceKey, userId, quarantinePath, "approved", scan?.request?.id ?? null, null, publicUrl);
-  if (!saved) return json(503, { error: "Image was screened but its approval record could not be saved." });
+  if (!saved) {
+    await fetch(`${supabaseUrl}/storage/v1/object/post-media/${objectPath}`, {
+      method: "DELETE",
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+    });
+    return json(503, { error: "Image was screened but its approval record could not be saved. Public copy removed." });
+  }
   return json(200, { status: "approved", public_url: publicUrl });
 });
 
