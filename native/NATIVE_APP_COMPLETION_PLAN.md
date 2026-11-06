@@ -43,15 +43,18 @@ This plan tracks implementation in the native Kotlin/Jetpack Compose Android app
 - [ ] Test RLS for users outside a conversation.
 
 ## Phase 6 — Notifications
-- [ ] Real follow/like/comment/reply/community/message notifications.
-- [ ] Read/unread state, deep links, pagination, and realtime refresh.
-- [ ] Push registration and delivery; permission prompts and preferences.
+- [x] Notifications inbox is reachable from Android navigation and iOS tab bar; both clients load the user's real notification rows and support marking read.
+- [ ] Event triggers for follow/like/comment notifications are prepared in a pending migration; apply and test in staging before production.
+- [ ] Deep links, pagination, realtime refresh, and notification preferences.
+- [ ] Push registration and delivery (FCM/APNs), permission prompts, and delivery testing. Requires Firebase/APNs project configuration and server-side credentials.
 
 ## Phase 7 — Quality and release
 - [ ] Automated unit/API tests and Android/iOS build checks.
 - [ ] Install and smoke-test release builds on real Android and iOS devices.
 - [ ] Verify auth, feed, media, follows, communities, messaging, and notifications end-to-end.
 - [ ] Accessibility, privacy, moderation, crash reporting, performance, and store-readiness review.
+- [x] Teen community safety policy drafted, including prohibited sexual content, reporting, review, and permanent-ban standards for confirmed severe violations.
+- [ ] Operational moderation queue, pre-publication media/text screening, admin-only permanent-ban tooling, evidence handling, and appeals are not yet implemented.
 
 ## Current status
-Phase 1 auth UI/API calls and Phase 2 follow/community-membership slices have been added on the native branch. Phase 3 text+image publishing is implemented but not yet verified. The Android debug build has passed on an earlier commit; the latest media commit is awaiting Android/iOS CI. No release build or end-to-end storage/auth test is claimed. Apply the SQL migration only after review. All remaining features stay incomplete until tested.
+Phase 1 auth UI/API calls, Phase 2 follow/community-membership slices, and native notifications inbox UI are present on the feature branch. Follow/like/comment notification triggers and device-token registry are prepared in a pending migration. Text+image publishing is implemented; Android debug build passed on the previous media commit, and the latest notification/safety commit is awaiting Android/iOS CI. No FCM/APNs delivery, release build, live migration, or end-to-end media test is claimed. Apply migrations only after review and staging tests. All remaining features stay incomplete until tested.
