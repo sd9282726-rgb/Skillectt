@@ -71,7 +71,7 @@ struct MainTabs: View {
             .padding(.horizontal, 22).frame(height: 72)
             .background(skillectBlack)
             TabView {
-                EmptyFeedScreen().tabItem { Label("Feed", systemImage: "house") }
+                FeedView(model: model).tabItem { Label("Feed", systemImage: "house") }
                 ExploreView(model: model).tabItem { Label("Explore", systemImage: "safari") }
                 CommunitiesView(model: model).tabItem { Label("Communities", systemImage: "person.3") }
                 CreateView(model: model).tabItem { Label("Create", systemImage: "plus.square") }
@@ -155,7 +155,7 @@ struct FeedView: View {
             Group {
                 if model.isLoading && model.posts.isEmpty { ProgressView("Loading your feed") }
                 else if model.posts.isEmpty {
-                    ContentUnavailableView("Your feed is ready", systemImage: "sparkles", description: Text("Share your first idea or follow people whose work inspires you."))
+                    skillectBlack.ignoresSafeArea()
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 12) {
