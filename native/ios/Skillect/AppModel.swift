@@ -194,7 +194,7 @@ final class AppModel: ObservableObject {
             moderationAppeals = try JSONDecoder().decode([ModerationAppeal].self, from: appeals)
             let textCases = try await request(path: "/rest/v1/moderation_text_cases?select=id,user_id,content_type,content_snapshot,reason,status,created_at&status=eq.blocked&order=created_at.asc&limit=100")
             moderationTextCases = try JSONDecoder().decode([ModerationTextCase].self, from: textCases)
-            let mediaCases = try await request(path: "/rest/v1/media_assets?select=id,owner_id,status,decision_reason,created_at&status=eq.rejected&reviewed_at=is.null&order=created_at.asc&limit=100")
+            let mediaCases = try await request(path: "/rest/v1/media_assets?select=id,owner_id,status,decision_reason,created_at,media_type,mime_type,post_content&status=eq.pending&media_type=eq.video&reviewed_at=is.null&order=created_at.asc&limit=100")
             moderationMediaCases = try JSONDecoder().decode([ModerationMediaCase].self, from: mediaCases)
             for index in moderationMediaCases.indices {
                 do {
@@ -257,6 +257,17 @@ final class AppModel: ObservableObject {
     }
 
 
+
+    func reviewVideoCase(_ item: ModerationMediaCase, approve: Bool) async {
+        guard isModerator else { return }
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["media_asset_id": item.id, "decision": approve ? "approve" : "reject"])
+            _ = try await request(path: "/functions/v1/review-video-post", method: "POST", body: body)
+            await loadModerationQueue()
+            await loadFeed()
+            infoMessage = approve ? "Video approved and published." : "Video rejected."
+        } catch { errorMessage = error.localizedDescription }
+    }
 
     func reviewMediaCase(_ item: ModerationMediaCase, ban: Bool) async {
         guard isModerator, let moderatorId = userId else { return }
