@@ -12,11 +12,16 @@ on:
       - "native/ios/**"
       - ".github/workflows/native-ios.yml"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   ios-simulator:
+    timeout-minutes: 30
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
