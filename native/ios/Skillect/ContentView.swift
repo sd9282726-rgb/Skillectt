@@ -12,12 +12,39 @@ struct RootView: View {
     var body: some View {
         Group {
             if model.accessToken == nil { SignInView(model: model) }
+            else if model.isAccountRestricted { AccountRestrictionView(model: model) }
             else {
                 MainTabs(model: model)
                     .task { await model.restoreSession() }
             }
         }
         .tint(skillectBlue).preferredColorScheme(.dark)
+    }
+}
+
+
+struct AccountRestrictionView: View {
+    @ObservedObject var model: AppModel
+    @State private var explanation = ""
+    var body: some View {
+        VStack(alignment:.leading,spacing:14) {
+            Spacer()
+            Image(systemName:"hand.raised.slash.fill").font(.system(size:42)).foregroundStyle(.red)
+            Text(model.restrictionStatus == "permanent" ? "Account permanently banned" : "Account restricted").font(.title2.bold())
+            Text(model.restrictionReason).foregroundStyle(.secondary)
+            if model.myAppealStatus == "pending" || model.myAppealStatus == "under_review" {
+                Label("Your appeal is \(model.myAppealStatus ?? "pending")",systemImage:"clock").foregroundStyle(.orange)
+                Text("A moderator will review your appeal. Your account remains restricted while it is being reviewed.")
+            } else {
+                Text("If you believe this decision was made in error, you can submit one appeal for moderator review.")
+                TextEditor(text:$explanation).frame(minHeight:150).padding(8).background(Color.white.opacity(0.06)).clipShape(RoundedRectangle(cornerRadius:12))
+                Button("Submit appeal") { Task { await model.submitAppeal(explanation) } }
+                    .buttonStyle(.borderedProminent).disabled(explanation.trimmingCharacters(in:.whitespacesAndNewlines).count < 20)
+            }
+            if let error=model.errorMessage { Text(error).font(.footnote).foregroundStyle(.red) }
+            Button("Sign out",role:.destructive) { model.signOut() }
+            Spacer()
+        }.padding(24).frame(maxWidth:.infinity,maxHeight:.infinity).background(skillectBlack.ignoresSafeArea())
     }
 }
 
