@@ -28,6 +28,7 @@ Skillect is an India-first social platform for teenagers to share learning, skil
 - Direct post/comment/message/profile writes are routed through the text moderation gateway; database triggers prevent the old direct REST write path from bypassing it.
 - Media upload is routed through a fail-closed moderation gateway and quarantined before approval. Direct client upload to the public media bucket is disabled.
 - Report evidence and moderator action audit records are stored in moderator-only tables.
+- A moderator-only Edge Function now issues 90-second signed URLs to preview rejected images in the private quarantine bucket; Android and iOS moderation queues display those previews when the moderator endpoint is available.
 - Evidence snapshots have a 180-day retention deadline and a daily scheduled purge job.
 - Realtime publication includes messages, notifications, posts, and comments; native websocket subscriptions are not yet implemented.
 - Android push delivery infrastructure exists, but requires Firebase configuration and a service-account secret.
@@ -42,7 +43,7 @@ Skillect is an India-first social platform for teenagers to share learning, skil
 5. **Specialist child-safety coverage is incomplete.** No dedicated grooming/CSAM detection and escalation integration is verified. Automated classifiers are not a substitute for trained human moderation.
 6. **Messaging is not realtime.** Messages are fetched over REST; websocket subscriptions and robust reconnect/offline delivery are not implemented.
 7. **Test coverage is incomplete.** Real-device E2E, two-account RLS tests, non-participant access tests, media adversarial tests, and full signup/session-expiry tests remain outstanding.
-8. **Moderation operations are incomplete.** Quarantined-media preview, moderator role provisioning, and a staffed escalation process must be completed. Evidence retention expiry is scheduled daily at 02:15 UTC.
+8. **Moderation operations are incomplete.** Real-device verification of quarantined-media preview, moderator role provisioning, and a staffed escalation process must be completed. Evidence retention expiry is scheduled daily at 02:15 UTC.
 9. **Push delivery is unverified.** Android FCM requires GitHub Actions client identifiers and the `FIREBASE_SERVICE_ACCOUNT_JSON` Supabase secret. iOS remote push remains out of scope by explicit product decision.
 10. **Auth security warning remains.** Supabase security advisor reports leaked-password protection disabled; enable it in Supabase Auth settings and verify.
 11. **Teen onboarding requirements remain.** Age/consent flow, India eligibility checks, privacy notices, and a legally reviewed child-safety process must be completed before public launch.
