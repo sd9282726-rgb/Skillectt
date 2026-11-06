@@ -56,7 +56,16 @@ struct NativeCommunity: Decodable, Identifiable {
 }
 struct NativeConversation: Identifiable { let id: String; var title: String { "Conversation \(id.prefix(8))" } }
 struct NativeChatMessage: Decodable, Identifiable { let id: String; let sender_id: String; let content: String }
-struct NativeNotification: Decodable, Identifiable {
+
+struct ModerationReport: Decodable, Identifiable {
+ let id:String; let reporter_id:String; let target_type:String; let target_id:String
+ let reason:String; let details:String?; let status:String; let created_at:String
+}
+struct ModerationAppeal: Decodable, Identifiable {
+ let id:String; let user_id:String; let enforcement_user_id:String
+ let explanation:String; let status:String; let created_at:String
+}
+\nstruct NativeNotification: Decodable, Identifiable {
     let id: String
     let type: String
     let message: String?
@@ -88,7 +97,7 @@ final class AppModel: ObservableObject {
     private func validateAccountStatus() async -> Bool {
         guard let me = userId, accessToken != nil else { return false }
         do {
-            let data = try await request(path: "/rest/v1/account_enforcements?select=status,reason&user_id=eq.\\(me)&limit=1")
+            let data = try await request(path: "/rest/v1/account_enforcements?select=status,reason&user_id=eq.\(me)&limit=1")
             let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] ?? []
             guard let enforcement = rows.first else { return true }
             let status = enforcement["status"] as? String ?? "suspended"
@@ -102,6 +111,67 @@ final class AppModel: ObservableObject {
             signOut()
             return false
         }
+    }
+
+
+    var isModerator: Bool {
+        guard let token = accessToken else { return false }
+        let parts = token.split(separator: ".")
+        guard parts.count > 1 else { return false }
+        var payload = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        while payload.count % 4 != 0 { payload.append("=") }
+        guard let data = Data(base64Encoded: payload),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let metadata = json["app_metadata"] as? [String: Any],
+              let role = metadata["role"] as? String else { return false }
+        return role == "moderator" || role == "admin"
+    }
+
+    func loadModerationQueue() async {
+        guard isModerator else { errorMessage = "Moderator access is required."; return }
+        do {
+            let reports = try await request(path: "/rest/v1/reports?select=id,reporter_id,target_type,target_id,reason,details,status,created_at&status=eq.pending&order=created_at.asc&limit=100")
+            moderationReports = try JSONDecoder().decode([ModerationReport].self, from: reports)
+            let appeals = try await request(path: "/rest/v1/moderation_appeals?select=id,user_id,enforcement_user_id,explanation,status,created_at&status=in.(pending,under_review)&order=created_at.asc&limit=100")
+            moderationAppeals = try JSONDecoder().decode([ModerationAppeal].self, from: appeals)
+            errorMessage = nil
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func resolveReport(_ report: ModerationReport) async {
+        guard isModerator else { return }
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["status": "resolved"])
+            _ = try await request(path: "/rest/v1/reports?id=eq.\(report.id)", method: "PATCH", body: body, prefer: "return=minimal")
+            await loadModerationQueue()
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func permanentlyBanReportedUser(_ report: ModerationReport) async {
+        guard isModerator, let moderatorId = userId else { return }
+        do {
+            var targetUserId = report.target_id
+            if report.target_type == "post" {
+                let data = try await request(path: "/rest/v1/posts?select=author_id&id=eq.\(report.target_id)&limit=1")
+                let rows = try JSONSerialization.jsonObject(with: data) as? [[String: String]] ?? []
+                guard let author = rows.first?["author_id"] else { throw NSError(domain: "Skillect", code: 2, userInfo: [NSLocalizedDescriptionKey: "Could not identify the post author"]) }
+                targetUserId = author
+            }
+            let body = try JSONSerialization.data(withJSONObject: ["user_id": targetUserId, "status": "permanent", "reason": "Moderator action from report: \(report.reason)", "issued_by": moderatorId])
+            _ = try await request(path: "/rest/v1/account_enforcements", method: "POST", body: body, prefer: "return=minimal")
+            await resolveReport(report)
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func reviewAppeal(_ appeal: ModerationAppeal, accept: Bool) async {
+        guard isModerator, let moderatorId = userId else { return }
+        do {
+            let status = accept ? "accepted" : "rejected"
+            let body = try JSONSerialization.data(withJSONObject: ["status": status, "reviewed_by": moderatorId, "reviewed_at": ISO8601DateFormatter().string(from: Date()), "moderator_note": accept ? "Appeal accepted by moderator" : "Appeal rejected by moderator"])
+            _ = try await request(path: "/rest/v1/moderation_appeals?id=eq.\(appeal.id)", method: "PATCH", body: body, prefer: "return=minimal")
+            if accept { _ = try await request(path: "/rest/v1/account_enforcements?user_id=eq.\(appeal.enforcement_user_id)", method: "DELETE", prefer: "return=minimal") }
+            await loadModerationQueue()
+        } catch { errorMessage = error.localizedDescription }
     }
 
     func restoreSession() async {
