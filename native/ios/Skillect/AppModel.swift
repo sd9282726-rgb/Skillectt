@@ -54,7 +54,12 @@ struct NativeCommunity: Decodable, Identifiable {
     let description: String
     let member_count: Int
 }
-struct NativeConversation: Identifiable { let id: String; var title: String { "Conversation \(id.prefix(8))" } }
+struct NativeConversation: Identifiable {
+    let id: String
+    let unreadCount: Int
+    init(id: String, unreadCount: Int = 0) { self.id = id; self.unreadCount = unreadCount }
+    var title: String { unreadCount > 0 ? "Conversation \(id.prefix(8)) · \(unreadCount) unread" : "Conversation \(id.prefix(8))" }
+}
 struct NativeChatMessage: Decodable, Identifiable { let id: String; let sender_id: String; let content: String }
 
 struct ModerationReport: Decodable, Identifiable {
@@ -475,7 +480,27 @@ final class AppModel: ObservableObject {
             let data = try await request(path: "/rest/v1/conversation_participants?select=conversation_id&user_id=eq.\(me)")
             let rows = try JSONSerialization.jsonObject(with: data) as? [[String: String]] ?? []
             let ids = Array(Set(rows.compactMap { $0["conversation_id"] })).sorted()
-            conversations = ids.map { NativeConversation(id: $0) }
+            var loaded: [NativeConversation] = []
+            for conversationId in ids {
+                let readData = try await request(path: "/rest/v1/conversation_reads?select=last_read_at&conversation_id=eq.\(conversationId)&user_id=eq.\(me)&limit=1")
+                let readRows = try JSONSerialization.jsonObject(with: readData) as? [[String: String]] ?? []
+                let lastRead = readRows.first?["last_read_at"]
+                var messagesPath = "/rest/v1/messages?select=id&conversation_id=eq.\(conversationId)&sender_id=neq.\(me)&limit=1000"
+                if let lastRead { messagesPath += "&created_at=gt." + lastRead }
+                let unreadData = try await request(path: messagesPath)
+                let unreadRows = try JSONSerialization.jsonObject(with: unreadData) as? [[String: Any]] ?? []
+                loaded.append(NativeConversation(id: conversationId, unreadCount: unreadRows.count))
+            }
+            conversations = loaded
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+
+    func markConversationRead(_ conversationId: String) async {
+        guard let me = userId else { return }
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["conversation_id": conversationId, "user_id": me, "last_read_at": ISO8601DateFormatter().string(from: Date())])
+            _ = try await request(path: "/rest/v1/conversation_reads?on_conflict=conversation_id,user_id", method: "POST", body: body, prefer: "resolution=merge-duplicates,return=minimal")
         } catch { errorMessage = error.localizedDescription }
     }
 
@@ -483,6 +508,8 @@ final class AppModel: ObservableObject {
         do {
             let data = try await request(path: "/rest/v1/messages?select=id,sender_id,content&conversation_id=eq.\(conversationId)&order=created_at.asc&limit=200")
             chatMessages = try JSONDecoder().decode([NativeChatMessage].self, from: data)
+            await markConversationRead(conversationId)
+            await loadConversations()
         } catch { errorMessage = error.localizedDescription }
     }
 
