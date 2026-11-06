@@ -260,11 +260,11 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     }
 
 
-    suspend fun reportPost(post: Post) {
+    suspend fun reportPost(post: Post, reason:String = "inappropriate_content") {
         val active=token ?: return
         val me=userId ?: return
         try {
-            api("POST","/rest/v1/reports",active,JSONObject().put("reporter_id",me).put("target_type","post").put("target_id",post.id).put("reason","inappropriate_content"))
+            api("POST","/rest/v1/reports",active,JSONObject().put("reporter_id",me).put("target_type","post").put("target_id",post.id).put("reason",reason))
             error="Report submitted for review"
         } catch(e:Exception){ error=e.message }
     }
@@ -478,7 +478,15 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                                             TextButton(onClick={scope.launch{toggleLike(post)}}){Text((if(likedIds.contains(post.id)) "♥ " else "♡ ")+post.likes)}
                                             TextButton(onClick={scope.launch{showCommentsFor=post.id;loadComments(post.id)}}){Text("Comments ${post.comments}")}
                                             TextButton(onClick={scope.launch{toggleSave(post)}}){Text(if(savedIds.contains(post.id)) "Saved" else "Save")}
-                                            TextButton(onClick={scope.launch{reportPost(post)}}){Text("Report")}
+                                            var reportMenuExpanded by remember(post.id) { mutableStateOf(false) }
+                                            Box {
+                                                TextButton(onClick={reportMenuExpanded=true}){Text("Report")}
+                                                DropdownMenu(expanded=reportMenuExpanded,onDismissRequest={reportMenuExpanded=false}) {
+                                                    listOf("sexual_content_or_nudity" to "Sexual content or nudity","harassment_or_hate" to "Harassment or hate","violence_or_self_harm" to "Violence or self-harm","spam_or_scam" to "Spam or scam","other" to "Other").forEach { (reason,label) ->
+                                                        DropdownMenuItem(text={Text(label)},onClick={reportMenuExpanded=false;scope.launch{reportPost(post,reason)}})
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
