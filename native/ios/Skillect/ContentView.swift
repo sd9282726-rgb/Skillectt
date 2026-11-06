@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private let skillectBlue = Color(red: 0.0, green: 0.78, blue: 0.47)
 private let skillectBlack = Color(red: 0.02, green: 0.02, blue: 0.035)
