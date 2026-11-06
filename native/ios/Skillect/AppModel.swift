@@ -73,6 +73,7 @@ final class AppModel: ObservableObject {
     @Published var followingIds: Set<String> = []
     @Published var projects: [NativeProject] = []
     @Published var communities: [NativeCommunity] = []
+    @Published var joinedCommunityIds: Set<String> = []
     @Published var notifications: [NativeNotification] = []
     @Published var currentProfile: DirectoryProfile?
     @Published var isBusy = false
@@ -228,6 +229,11 @@ final class AppModel: ObservableObject {
             let communityData = try await request(path: "/rest/v1/communities?select=id,name,description,member_count&order=created_at.desc&limit=100")
             communities = try JSONDecoder().decode([NativeCommunity].self, from: communityData)
             if let me = userId {
+                let memberData = try await request(path: "/rest/v1/community_members?select=community_id&user_id=eq.\\(me)")
+                let memberRows = try JSONSerialization.jsonObject(with: memberData) as? [[String: String]] ?? []
+                joinedCommunityIds = Set(memberRows.compactMap { $0["community_id"] })
+            }
+            if let me = userId {
                 let notificationData = try await request(path: "/rest/v1/notifications?select=id,type,message,read&user_id=eq.\(me)&order=created_at.desc&limit=50")
                 notifications = try JSONDecoder().decode([NativeNotification].self, from: notificationData)
             }
@@ -253,11 +259,11 @@ final class AppModel: ObservableObject {
     }
 
     func joinCommunity(_ communityId: String) async {
-        guard let me = userId else { return }
+        guard let me = userId, !joinedCommunityIds.contains(communityId) else { return }
         do {
             let body = try JSONSerialization.data(withJSONObject: ["community_id": communityId, "user_id": me])
             _ = try await request(path: "/rest/v1/community_members", method: "POST", body: body, prefer: "return=minimal")
-            await loadDirectory()
+            joinedCommunityIds.insert(communityId)
         } catch { errorMessage = error.localizedDescription }
     }
 
