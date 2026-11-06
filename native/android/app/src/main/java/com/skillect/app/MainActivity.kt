@@ -365,9 +365,28 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         val active=token ?: return
         val me=userId ?: return
         try {
-            val rows=apiArray("/rest/v1/conversation_participants?select=conversation_id&user_id=eq.$me",active)
+            val rows=apiArray("/rest/v1/conversation_participants?select=conversation_id&user_id=eq."+me,active)
             val ids=(0 until rows.length()).map{rows.getJSONObject(it).optString("conversation_id")}.filter{it.isNotBlank()}.distinct()
-            conversations=ids.map{SimpleItem(it,"Conversation ${it.take(8)}","Tap to open")}
+            val loaded=mutableListOf<SimpleItem>()
+            for(id in ids) {
+                val reads=apiArray("/rest/v1/conversation_reads?select=last_read_at&conversation_id=eq."+id+"&user_id=eq."+me+"&limit=1",active)
+                val lastRead=reads.optJSONObject(0)?.optString("last_read_at")
+                var unreadPath="/rest/v1/messages?select=id&conversation_id=eq."+id+"&sender_id=neq."+me+"&limit=1000"
+                if(!lastRead.isNullOrBlank()) unreadPath += "&created_at=gt."+lastRead
+                val unread=apiArray(unreadPath,active).length()
+                loaded.add(SimpleItem(id,"Conversation "+id.take(8),if(unread>0) "$unread unread" else "No unread messages"))
+            }
+            conversations=loaded
+        } catch(e:Exception){ error=e.message }
+    }
+
+    suspend fun markConversationRead(conversationId:String) {
+        val active=token ?: return
+        val me=userId ?: return
+        try {
+            api("POST","/rest/v1/conversation_reads?on_conflict=conversation_id,user_id",active,
+                JSONObject().put("conversation_id",conversationId).put("user_id",me).put("last_read_at",java.time.Instant.now().toString()),
+                "resolution=merge-duplicates,return=minimal")
         } catch(e:Exception){ error=e.message }
     }
 
@@ -376,6 +395,8 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         try {
             val arr=apiArray("/rest/v1/messages?select=id,sender_id,content&conversation_id=eq.$conversationId&order=created_at.asc&limit=200",active)
             chatMessages=(0 until arr.length()).map{val m=arr.getJSONObject(it);ChatMessage(m.optString("id"),m.optString("sender_id"),m.optString("content"))}
+            markConversationRead(conversationId)
+            loadConversations()
         } catch(e:Exception){ error=e.message }
     }
 
@@ -389,6 +410,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             val conversationId=data.optJSONObject(0)?.optString("id") ?: error("Conversation was not created")
             api("POST","/rest/v1/conversation_participants",active,JSONObject().put("conversation_id",conversationId).put("user_id",me))
             api("POST","/rest/v1/conversation_participants",active,JSONObject().put("conversation_id",conversationId).put("user_id",targetId))
+            markConversationRead(conversationId)
             loadConversations()
             activeConversationId=conversationId
             loadChatMessages(conversationId)
@@ -769,7 +791,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         }
                         if(activeConversationId==null) {
                             if(conversations.isEmpty()) Text("No conversations yet. Find someone in Explore and tap Message.",color=Color.Gray)
-                            LazyColumn { items(conversations){ c -> TextButton(onClick={activeConversationId=c.id;scope.launch{loadChatMessages(c.id)}}){Text(c.title,color=Ink)} } }
+                            LazyColumn { items(conversations){ c -> TextButton(onClick={activeConversationId=c.id;scope.launch{loadChatMessages(c.id)}}){Column { Text(c.title,color=Ink); Text(c.detail,color=Color.Gray,fontSize=11.sp) }} } }
                         } else {
                             LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp)) {
                                 items(chatMessages){ m ->
