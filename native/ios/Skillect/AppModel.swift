@@ -65,7 +65,8 @@ struct ModerationAppeal: Decodable, Identifiable {
  let id:String; let user_id:String; let enforcement_user_id:String
  let explanation:String; let status:String; let created_at:String
 }
-\nstruct NativeNotification: Decodable, Identifiable {
+
+struct NativeNotification: Decodable, Identifiable {
     let id: String
     let type: String
     let message: String?
@@ -93,6 +94,10 @@ final class AppModel: ObservableObject {
     @Published var isBusy = false
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var isAccountRestricted = false
+    @Published var restrictionStatus = ""
+    @Published var restrictionReason = ""
+    @Published var myAppealStatus: String?
 
     private func validateAccountStatus() async -> Bool {
         guard let me = userId, accessToken != nil else { return false }
