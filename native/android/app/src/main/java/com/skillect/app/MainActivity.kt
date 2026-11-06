@@ -372,7 +372,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                 val reads=apiArray("/rest/v1/conversation_reads?select=last_read_at&conversation_id=eq."+id+"&user_id=eq."+me+"&limit=1",active)
                 val lastRead=reads.optJSONObject(0)?.optString("last_read_at")
                 var unreadPath="/rest/v1/messages?select=id&conversation_id=eq."+id+"&sender_id=neq."+me+"&limit=1000"
-                if(!lastRead.isNullOrBlank()) unreadPath += "&created_at=gt."+lastRead
+                if(!lastRead.isNullOrBlank()) unreadPath += "&created_at=gt."+lastRead.replace("+","%2B")
                 val unread=apiArray(unreadPath,active).length()
                 loaded.add(SimpleItem(id,"Conversation "+id.take(8),if(unread>0) "$unread unread" else "No unread messages"))
             }
