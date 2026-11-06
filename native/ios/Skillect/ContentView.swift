@@ -543,6 +543,20 @@ struct ModerationView: View {
       }.padding(.vertical,6)
      }
     }
+    Section("Flagged text awaiting review") {
+     if model.moderationTextCases.isEmpty { Text("No blocked text cases").foregroundStyle(.secondary) }
+     ForEach(model.moderationTextCases) { item in
+      VStack(alignment:.leading,spacing:8) {
+       Text(item.content_type.capitalized + " · " + item.reason).font(.headline)
+       Text(item.content_snapshot)
+       Text("Account: \\(item.user_id)").font(.caption).foregroundStyle(.secondary)
+       HStack {
+        Button("Mark reviewed") { Task { await model.reviewTextCase(item,ban:false) } }.buttonStyle(.bordered)
+        Button("Permanently ban") { Task { await model.reviewTextCase(item,ban:true) } }.buttonStyle(.borderedProminent).tint(.red)
+       }
+      }.padding(.vertical,6)
+     }
+    }
     Section("Appeals") {
      if model.moderationAppeals.isEmpty { Text("No pending appeals").foregroundStyle(.secondary) }
      ForEach(model.moderationAppeals) { appeal in
