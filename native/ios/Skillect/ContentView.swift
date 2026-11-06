@@ -211,6 +211,12 @@ private struct MessagesView: View {
                                     HStack {
                                         if message.sender_id == model.userId { Spacer(minLength: 35) }
                                         Text(message.content).padding(12).background(message.sender_id == model.userId ? skillectBlue.opacity(0.25) : Color.white.opacity(0.08)).clipShape(RoundedRectangle(cornerRadius: 14))
+                                            .contextMenu {
+                                                if message.sender_id != model.userId {
+                                                    Button("Report message", systemImage: "exclamationmark.shield") { Task { await model.reportMessage(message) } }
+                                                    Button("Block sender", systemImage: "hand.raised.slash", role: .destructive) { Task { await model.blockUser(message.sender_id) } }
+                                                }
+                                            }
                                         if message.sender_id != model.userId { Spacer(minLength: 35) }
                                     }
                                 }
