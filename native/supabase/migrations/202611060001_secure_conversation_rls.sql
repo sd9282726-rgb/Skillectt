@@ -84,7 +84,11 @@ alter table public.conversations
 alter table public.conversations
   alter column created_by set default auth.uid();
 
-create or replace function public.is_conversation_participant(_conversation_id uuid)
+create schema if not exists private;
+revoke all on schema private from public, anon;
+grant usage on schema private to authenticated;
+
+create or replace function private.is_conversation_participant(_conversation_id uuid)
 returns boolean
 language sql
 stable
@@ -99,12 +103,12 @@ as $$
   );
 $$;
 
-revoke all on function public.is_conversation_participant(uuid) from public, anon;
+revoke all on function private.is_conversation_participant(uuid) from public, anon;
 
-grant execute on function public.is_conversation_participant(uuid) to authenticated;
+grant execute on function private.is_conversation_participant(uuid) to authenticated;
 
 -- A block in either direction prevents new direct messages.
-create or replace function public.can_send_message(_conversation_id uuid)
+create or replace function private.can_send_message(_conversation_id uuid)
 returns boolean
 language sql
 stable
@@ -126,8 +130,8 @@ as $
       )
   );
 $;
-revoke all on function public.can_send_message(uuid) from public, anon;
-grant execute on function public.can_send_message(uuid) to authenticated;
+revoke all on function private.can_send_message(uuid) from public, anon;
+grant execute on function private.can_send_message(uuid) to authenticated;
 
 
 drop policy if exists "Participants visible to members" on public.conversation_participants;
@@ -146,7 +150,7 @@ drop policy if exists "Only participants can send messages as themselves" on pub
 create policy "Members can view their conversation participants"
 on public.conversation_participants
 for select to authenticated
-using (public.is_conversation_participant(conversation_id));
+using (private.is_conversation_participant(conversation_id));
 
 -- A conversation creator can add the initial participants; existing
 -- participants can add invitees. The app must still implement invite/accept UI.
@@ -160,7 +164,7 @@ with check (
     where conv.id = conversation_participants.conversation_id
       and (
         conv.created_by = auth.uid()
-        or public.is_conversation_participant(conv.id)
+        or private.is_conversation_participant(conv.id)
       )
   )
 );
@@ -168,7 +172,7 @@ with check (
 create policy "Users can view conversations they belong to"
 on public.conversations
 for select to authenticated
-using (public.is_conversation_participant(id));
+using (private.is_conversation_participant(id));
 
 create policy "Authenticated users create conversations as themselves"
 on public.conversations
@@ -178,14 +182,14 @@ with check (created_by = auth.uid());
 create policy "Only conversation participants can read messages"
 on public.messages
 for select to authenticated
-using (public.is_conversation_participant(conversation_id));
+using (private.is_conversation_participant(conversation_id));
 
 create policy "Only participants can send messages as themselves"
 on public.messages
 for insert to authenticated
 with check (
   sender_id = auth.uid()
-  and public.can_send_message(conversation_id)
+  and private.can_send_message(conversation_id)
 );
 
 -- Restrict post-media uploads and replacements to a path rooted at the
