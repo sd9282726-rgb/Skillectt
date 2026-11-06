@@ -12,11 +12,16 @@ on:
       - "native/android/**"
       - ".github/workflows/native-android.yml"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   android-debug-apk:
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
