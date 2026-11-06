@@ -213,6 +213,11 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             val q=URLEncoder.encode(searchText.trim(), "UTF-8")
             val arr=apiArray("/rest/v1/profiles?select=id,display_name,username,bio&or=(username.ilike.%25$q%25,display_name.ilike.%25$q%25)&limit=30",active)
             results=(0 until arr.length()).map { val p=arr.getJSONObject(it); SimpleItem(p.optString("id"),p.optString("display_name")+"  @"+p.optString("username"),p.optString("bio")) }
+            val me=userId
+            if(me!=null) {
+                val following=apiArray("/rest/v1/follows?select=following_id&follower_id=eq.$me",active)
+                followingIds=(0 until following.length()).map { following.getJSONObject(it).optString("following_id") }.toSet()
+            }
         } catch(e:Exception){ error=e.message }
     }
 
