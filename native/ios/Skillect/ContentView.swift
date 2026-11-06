@@ -104,6 +104,7 @@ struct MainTabs: View {
                 CommunitiesView(model: model).tabItem { Label("Communities", systemImage: "person.3") }
                 CreateView(model: model).tabItem { Label("Create", systemImage: "plus.square") }
                 MessagesPlaceholder().tabItem { Label("Messages", systemImage: "bubble.left") }
+                NotificationsView(model: model).tabItem { Label("Alerts", systemImage: "bell") }
                 ProfileView(model: model).tabItem { Label("Profile", systemImage: "person") }
             }
             .toolbarBackground(skillectBlack, for: .tabBar)
@@ -115,6 +116,50 @@ struct MainTabs: View {
 
 private struct EmptyFeedScreen: View {
     var body: some View { skillectBlack.ignoresSafeArea() }
+}
+
+
+private struct NotificationsView: View {
+    @ObservedObject var model: AppModel
+    var body: some View {
+        NavigationStack {
+            List {
+                if model.notifications.isEmpty {
+                    Text("You’re all caught up. New activity will appear here.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(model.notifications) { notification in
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: notification.read ? "bell" : "bell.badge.fill")
+                            .foregroundStyle(notification.read ? .secondary : .blue)
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(notification.type.replacingOccurrences(of: "_", with: " ").capitalized)
+                                .font(.headline)
+                            Text(notification.message ?? "You have a new notification")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                            if !notification.read {
+                                Button("Mark as read") {
+                                    Task { await model.markNotificationRead(notification.id) }
+                                }.font(.caption)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                        if !notification.read {
+                            Circle().fill(.blue).frame(width: 7, height: 7)
+                        }
+                    }.padding(.vertical, 5)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(skillectBlack)
+            .navigationTitle("Notifications")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Refresh") { Task { await model.loadDirectory() } }
+                }
+            }
+        }
+    }
 }
 
 private struct MessagesPlaceholder: View {
