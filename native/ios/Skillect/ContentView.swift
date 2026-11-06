@@ -259,7 +259,6 @@ struct CommentsView: View {
 struct ExploreView: View {
     @ObservedObject var model: AppModel
     @State private var query = ""
-    @State private var following = Set<String>()
     var filtered: [DirectoryProfile] {
         guard !query.isEmpty else { return model.directory }
         return model.directory.filter { $0.username.localizedCaseInsensitiveContains(query) || $0.display_name.localizedCaseInsensitiveContains(query) || $0.bio.localizedCaseInsensitiveContains(query) }
@@ -278,11 +277,8 @@ struct ExploreView: View {
                         }
                         Spacer()
                         if person.id != model.userId {
-                            Button(following.contains(person.id) ? "Following" : "Follow") {
-                                Task {
-                                    await model.toggleFollow(person.id)
-                                    if following.contains(person.id) { following.remove(person.id) } else { following.insert(person.id) }
-                                }
+                            Button(model.followingIds.contains(person.id) ? "Following" : "Follow") {
+                                Task { await model.toggleFollow(person.id) }
                             }.buttonStyle(.bordered)
                             Button("Block") { Task { await model.blockUser(person.id) } }.buttonStyle(.bordered)
                         }
