@@ -49,7 +49,7 @@ final class AppModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
 
-    func signIn(email: String, password: String) async {
+    func restoreSession() async {\n        guard accessToken != nil else { return }\n        do {\n            let data = try await request(path: "/auth/v1/user")\n            let user = try JSONDecoder().decode(AuthUser.self, from: data)\n            userId = user.id\n            await loadFeed()\n        } catch { errorMessage = error.localizedDescription }\n    }\n\n    func signIn(email: String, password: String) async {
         isBusy = true
         errorMessage = nil
         defer { isBusy = false }
@@ -150,7 +150,7 @@ final class AppModel: ObservableObject {
     }
 
     private func request(path: String, method: String = "GET", body: Data? = nil, authenticated: Bool = true, prefer: String? = nil) async throws -> Data {
-        var request = URLRequest(url: Backend.baseURL.appendingPathComponent(path))
+        var request = URLRequest(url: URL(string: path, relativeTo: Backend.baseURL)!.absoluteURL)
         request.httpMethod = method
         request.setValue(Backend.publishableKey, forHTTPHeaderField: "apikey")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
