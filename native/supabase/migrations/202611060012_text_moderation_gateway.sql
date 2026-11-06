@@ -2,7 +2,7 @@
 create table if not exists public.moderation_text_cases (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  content_type text not null check (content_type in ('post','comment','message')),
+  content_type text not null check (content_type in ('post','comment','message','profile')),
   content_snapshot text not null,
   reason text not null,
   provider_reference text,
@@ -48,4 +48,8 @@ create trigger require_moderated_text_for_comments before insert on public.comme
 for each row execute function private.require_text_moderation_gateway();
 drop trigger if exists require_moderated_text_for_messages on public.messages;
 create trigger require_moderated_text_for_messages before insert on public.messages
+for each row execute function private.require_text_moderation_gateway();
+
+drop trigger if exists require_moderated_text_for_profiles on public.profiles;
+create trigger require_moderated_text_for_profiles before update of display_name,username,bio on public.profiles
 for each row execute function private.require_text_moderation_gateway();
