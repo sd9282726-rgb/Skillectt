@@ -118,6 +118,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     var isModerator by remember { mutableStateOf(false) }
     var moderationReports by remember { mutableStateOf<List<ModerationRow>>(emptyList()) }
     var moderationAppeals by remember { mutableStateOf<List<ModerationRow>>(emptyList()) }
+    var moderationTextCases by remember { mutableStateOf<List<ModerationRow>>(emptyList()) }
     var posts by remember { mutableStateOf<List<Post>>(emptyList()) }
     var likedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var savedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -176,6 +177,11 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                 val r=appeals.getJSONObject(i)
                 ModerationRow(r.optString("id"),"Appeal · "+r.optString("status"),r.optString("explanation"),r.optString("enforcement_user_id"),"account",r.optString("user_id"))
             }
+            val textCases=apiArray("/rest/v1/moderation_text_cases?select=id,user_id,content_type,content_snapshot,reason,status&status=eq.blocked&order=created_at.asc&limit=100",active)
+            moderationTextCases=(0 until textCases.length()).map { i ->
+                val r=textCases.getJSONObject(i)
+                ModerationRow(r.optString("id"),r.optString("content_type")+" · "+r.optString("reason"),r.optString("content_snapshot"),r.optString("user_id"),"text_case",r.optString("reason"))
+            }
             error=null
         } catch(e:Exception) { error=e.message }
     }
@@ -220,6 +226,22 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             }
             api("POST","/rest/v1/account_enforcements",active,JSONObject().put("user_id",target).put("status","permanent").put("reason","Moderator action from report: "+row.reason).put("issued_by",moderator))
             resolveModerationReport(row)
+        } catch(e:Exception) { error=e.message }
+    }
+
+
+    suspend fun reviewModerationTextCase(row:ModerationRow, ban:Boolean) {
+        val active=token ?: return
+        val moderator=userId ?: return
+        try {
+            if(ban) {
+                val existing=apiArray("/rest/v1/account_enforcements?select=user_id&user_id=eq."+row.targetId+"&limit=1",active)
+                val body=JSONObject().put("status","permanent").put("reason","Moderator-confirmed text safety violation: "+row.reason).put("issued_by",moderator)
+                if(existing.length()==0) api("POST","/rest/v1/account_enforcements",active,JSONObject(body.toString()).put("user_id",row.targetId))
+                else api("PATCH","/rest/v1/account_enforcements?user_id=eq."+row.targetId,active,body)
+            }
+            api("PATCH","/rest/v1/moderation_text_cases?id=eq."+row.id,active,JSONObject().put("status",if(ban)"escalated" else "reviewed").put("reviewed_by",moderator).put("reviewed_at",java.time.Instant.now().toString()).put("moderator_note",if(ban)"Account permanently banned after moderator review" else "Reviewed; no account ban applied"))
+            loadModerationQueue()
         } catch(e:Exception) { error=e.message }
     }
 
@@ -739,6 +761,21 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                                             if(row.targetType=="post") TextButton(onClick={scope.launch{hideReportedPost(row)}}){Text("Hide post")}
                                             if(row.targetType=="comment") TextButton(onClick={scope.launch{hideReportedComment(row)}}){Text("Hide comment")}
                                             TextButton(onClick={scope.launch{banReportedAccount(row)}}){Text("Permanently ban",color=Color.Red)}
+                                        }
+                                    }
+                                }
+                            }
+                            item { Text("Flagged text awaiting review",fontWeight=FontWeight.Bold,color=Ink,modifier=Modifier.padding(top=12.dp)) }
+                            if(moderationTextCases.isEmpty()) item { Text("No blocked text cases",color=Color.Gray) }
+                            items(moderationTextCases,key={"text-case-"+it.id}) { row ->
+                                Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=Color(0xFF171720))) {
+                                    Column(Modifier.padding(14.dp)) {
+                                        Text(row.title,fontWeight=FontWeight.Bold,color=Ink)
+                                        Text(row.detail,color=Ink)
+                                        Text("Account: "+row.targetId,fontSize=11.sp,color=Color.Gray)
+                                        Row {
+                                            TextButton(onClick={scope.launch{reviewModerationTextCase(row,false)}}){Text("Mark reviewed")}
+                                            TextButton(onClick={scope.launch{reviewModerationTextCase(row,true)}}){Text("Permanently ban",color=Color.Red)}
                                         }
                                     }
                                 }
