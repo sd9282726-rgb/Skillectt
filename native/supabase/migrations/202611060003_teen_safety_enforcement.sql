@@ -195,6 +195,8 @@ for each row execute function private.require_approved_post_media();
 drop policy if exists "Authenticated users can upload post-media" on storage.objects;
 drop policy if exists "Users upload post-media into their own folder" on storage.objects;
 drop policy if exists "Moderation gateway only may upload post-media" on storage.objects;
+drop policy if exists "Users can update own post-media" on storage.objects;
+drop policy if exists "Users update their own post-media" on storage.objects;
 create policy "Moderation gateway only may upload post-media"
 on storage.objects for insert to authenticated
 with check (false);
