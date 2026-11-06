@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -413,12 +414,12 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         if(posts.isEmpty()) Spacer(Modifier.fillMaxSize())
                         else LazyColumn(contentPadding=PaddingValues(14.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                             items(posts,key={it.id}) { post ->
-                                Card(colors=CardDefaults.cardColors(containerColor=Color.White),shape=RoundedCornerShape(18.dp),modifier=Modifier.fillMaxWidth()) {
+                                Card(colors=CardDefaults.cardColors(containerColor=Color(0xFF171720)),shape=RoundedCornerShape(18.dp),modifier=Modifier.fillMaxWidth()) {
                                     Column(Modifier.padding(18.dp)) {
                                         Text(post.author,fontWeight=FontWeight.Bold,color=Ink)
                                         Text("@${post.handle}",color=Color.Gray,fontSize=12.sp)
                                         Text(post.body,color=Ink,modifier=Modifier.padding(top=12.dp),lineHeight=22.sp)
-                                        post.image?.let { mediaUrl -> TextButton(onClick={context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(mediaUrl)))},modifier=Modifier.padding(top=4.dp)){Text("Open attached image",color=Blue,fontSize=12.sp)} }
+                                        post.image?.let { mediaUrl -> AsyncImage(model=mediaUrl,contentDescription="Post image",modifier=Modifier.fillMaxWidth().heightIn(max=420.dp).padding(top=10.dp),contentScale=androidx.compose.ui.layout.ContentScale.FillWidth) }
                                         Row(Modifier.fillMaxWidth().padding(top=10.dp),horizontalArrangement=Arrangement.SpaceBetween) {
                                             TextButton(onClick={scope.launch{toggleLike(post)}}){Text((if(likedIds.contains(post.id)) "♥ " else "♡ ")+post.likes)}
                                             TextButton(onClick={scope.launch{showCommentsFor=post.id;loadComments(post.id)}}){Text("Comments ${post.comments}")}
