@@ -111,6 +111,14 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             val u = api("GET", "/auth/v1/user", active)
             userId = u.optString("id").takeIf { it.isNotBlank() }
             val id = userId ?: return
+            val enforcement = apiArray("/rest/v1/account_enforcements?select=status,reason&user_id=eq.$id&limit=1", active)
+            if (enforcement.length() > 0) {
+                val status = enforcement.getJSONObject(0).optString("status")
+                error = if (status == "permanent") "This account has been permanently banned from Skillect." else "This account is temporarily restricted."
+                token = null
+                onSignOut()
+                return
+            }
             val arr = apiArray("/rest/v1/profiles?select=display_name,username,bio&id=eq.$id&limit=1", active)
             if (arr.length() > 0) {
                 val p = arr.getJSONObject(0)
@@ -322,11 +330,13 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         val active=token ?: return
         val author=userId ?: return
         if(createText.isBlank()) return
+        if (selectedMediaUri != null) {
+            error = "Photo publishing is paused until automated safety screening is connected."
+            return
+        }
         busy=true
         try {
-            val mediaUrl = selectedMediaUri?.let { uploadPostMedia(context,it,active,author) }
             val body=JSONObject().put("author_id",author).put("content",createText.trim()).put("tags",JSONArray())
-            if(mediaUrl!=null) body.put("image_url",mediaUrl)
             api("POST","/rest/v1/posts",active,body)
             createText=""
             selectedMediaUri=null
@@ -503,9 +513,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         Text("Share your progress",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
                         OutlinedTextField(createText,{createText=it},label={Text("What are you learning or building?")},modifier=Modifier.fillMaxWidth().heightIn(min=150.dp),maxLines=8)
                         Row(verticalAlignment=Alignment.CenterVertically) {
-                            TextButton(onClick={mediaPicker.launch("image/*")},enabled=!busy){Text("Choose image")}
-                            selectedMediaName?.let { Text(it.takeLast(28),color=Color.Gray,fontSize=12.sp) }
-                            if(selectedMediaUri!=null) TextButton(onClick={selectedMediaUri=null;selectedMediaName=null}){Text("Remove")}
+                            Text("Photo uploads paused until safety screening is connected",color=Color.Gray,fontSize=12.sp)
                         }
                         Button(onClick={scope.launch{createPost()}},enabled=(createText.isNotBlank()||selectedMediaUri!=null)&&!busy,modifier=Modifier.padding(top=12.dp)){Text(if(busy)"Publishing…" else "Publish post")}
                     }
