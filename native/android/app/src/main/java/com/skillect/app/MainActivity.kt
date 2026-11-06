@@ -304,7 +304,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         try {
             api("POST","/functions/v1/review-video-post",active,JSONObject().put("media_asset_id",row.id).put("decision",if(approve)"approve" else "reject"))
             loadModerationQueue()
-            loadFeed()
+            refresh++
             error=if(approve) "Video approved and published." else "Video rejected."
         } catch(e:Exception) { error=e.message }
     }
@@ -670,8 +670,9 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     }
 
     DisposableEffect(token) {
-        if(token!=null) {
-            val realtime=RealtimeSocket(token) {
+        val activeToken = token
+        if(activeToken!=null) {
+            val realtime=RealtimeSocket(activeToken) {
                 scope.launch {
                     loadFeed()
                     loadNotifications()
