@@ -170,7 +170,7 @@ final class AppModel: ObservableObject {
                 guard mime.hasPrefix("image/") else { throw NSError(domain: "Skillect", code: 415, userInfo: [NSLocalizedDescriptionKey: "Choose an image file"]) }
                 let ext = mime == "image/jpeg" ? "jpg" : (mime as NSString).pathExtension.isEmpty ? "img" : (mime as NSString).pathExtension
                 let objectPath = "\(me)/\(UUID().uuidString.lowercased()).\(ext)"
-                var upload = URLRequest(url: Backend.baseURL.appendingPathComponent("storage/v1/object/post-media/\(objectPath)"))
+                var upload = URLRequest(url: URL(string: "storage/v1/object/post-media/\(objectPath)", relativeTo: Backend.baseURL)!.absoluteURL)
                 upload.httpMethod = "POST"
                 upload.setValue(Backend.publishableKey, forHTTPHeaderField: "apikey")
                 if let accessToken { upload.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization") }
@@ -181,7 +181,7 @@ final class AppModel: ObservableObject {
                 guard let http = uploadResponse as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                     throw NSError(domain: "Skillect", code: (uploadResponse as? HTTPURLResponse)?.statusCode ?? -1, userInfo: [NSLocalizedDescriptionKey: String(data: uploadData, encoding: .utf8) ?? "Image upload failed"])
                 }
-                imageURL = Backend.baseURL.appendingPathComponent("storage/v1/object/public/post-media/\(objectPath)").absoluteString
+                imageURL = URL(string: "storage/v1/object/public/post-media/\(objectPath)", relativeTo: Backend.baseURL)!.absoluteURL.absoluteString
             }
             var post: [String: Any] = ["author_id": me, "content": cleanText, "tags": [String]()]
             if let imageURL { post["image_url"] = imageURL }
