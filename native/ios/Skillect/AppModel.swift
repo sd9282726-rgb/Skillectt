@@ -156,12 +156,36 @@ final class AppModel: ObservableObject {
         } catch { errorMessage = error.localizedDescription }
     }
 
-    func createPost(_ content: String) async {
-        guard let me = userId, !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+    func createPost(_ content: String, imageData: Data? = nil, imageMime: String? = nil) async {
+        guard let me = userId else { return }
+        let cleanText = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanText.isEmpty || imageData != nil else { return }
         isBusy = true
         defer { isBusy = false }
         do {
-            let body = try JSONSerialization.data(withJSONObject: ["author_id": me, "content": content.trimmingCharacters(in: .whitespacesAndNewlines), "tags": [String]()])
+            var imageURL: String?
+            if let imageData {
+                guard imageData.count <= 12 * 1024 * 1024 else { throw NSError(domain: "Skillect", code: 413, userInfo: [NSLocalizedDescriptionKey: "Image must be 12 MB or smaller"]) }
+                let mime = imageMime ?? "image/jpeg"
+                guard mime.hasPrefix("image/") else { throw NSError(domain: "Skillect", code: 415, userInfo: [NSLocalizedDescriptionKey: "Choose an image file"]) }
+                let ext = mime == "image/jpeg" ? "jpg" : (mime as NSString).pathExtension.isEmpty ? "img" : (mime as NSString).pathExtension
+                let objectPath = "\(me)/\(UUID().uuidString.lowercased()).\(ext)"
+                var upload = URLRequest(url: Backend.baseURL.appendingPathComponent("storage/v1/object/post-media/\(objectPath)"))
+                upload.httpMethod = "POST"
+                upload.setValue(Backend.publishableKey, forHTTPHeaderField: "apikey")
+                if let accessToken { upload.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization") }
+                upload.setValue(mime, forHTTPHeaderField: "Content-Type")
+                upload.setValue("false", forHTTPHeaderField: "x-upsert")
+                upload.httpBody = imageData
+                let (uploadData, uploadResponse) = try await URLSession.shared.data(for: upload)
+                guard let http = uploadResponse as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                    throw NSError(domain: "Skillect", code: (uploadResponse as? HTTPURLResponse)?.statusCode ?? -1, userInfo: [NSLocalizedDescriptionKey: String(data: uploadData, encoding: .utf8) ?? "Image upload failed"])
+                }
+                imageURL = Backend.baseURL.appendingPathComponent("storage/v1/object/public/post-media/\(objectPath)").absoluteString
+            }
+            var post: [String: Any] = ["author_id": me, "content": cleanText, "tags": [String]()]
+            if let imageURL { post["image_url"] = imageURL }
+            let body = try JSONSerialization.data(withJSONObject: post)
             _ = try await request(path: "/rest/v1/posts", method: "POST", body: body, prefer: "return=minimal")
             await loadFeed()
         } catch { errorMessage = error.localizedDescription }
