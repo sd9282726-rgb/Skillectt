@@ -1,23 +1,41 @@
 # Skillect native apps
 
-This directory is a separate native implementation. It does not replace or modify the existing web app or the existing Expo app.
+This directory contains separate native Android (Kotlin/Jetpack Compose) and iOS (SwiftUI) applications. The existing web application and existing Expo app are not replaced or modified by this work.
 
-## Android
-- Kotlin + Jetpack Compose
-- Package: `com.skillect.app`
-- Minimum Android: API 24
-- Cloud build: GitHub Actions workflow **Native Android build**
-- Current foundation: Supabase email/password sign-in and a read-only feed backed by the existing `profiles` and `posts` tables.
+## Backend
+- Supabase project: `chohswyxsckpwyzlbzav`
+- Both apps use the project's publishable key and the signed-in user's access token.
+- Never place a service-role key in a mobile app.
+- All reads and writes are subject to Supabase Row Level Security.
 
-## iOS
-- Swift + SwiftUI
-- Bundle identifier: `com.skillect.app`
-- Simulator build is intended to run on a macOS GitHub Actions runner. App Store distribution requires Apple signing assets.
+## Implemented native vertical slices
+- Email/password sign-in with persisted session (Android preferences / iOS Keychain).
+- Feed read and refresh.
+- Create text posts.
+- Like/unlike and save/unsave posts.
+- Read and create comments.
+- Search public profiles and follow/unfollow (iOS); profile lookup (Android).
+- Profile editing (Android and iOS).
+- Read projects and create a project (Android and iOS).
+- Browse communities and join (Android and iOS).
+- Read notifications and mark them read (Android and iOS).
 
-## Backend safety
-Both native clients use the Supabase publishable key and the signed-in user's access token. Never put a service-role key in a mobile app. All user data access must remain subject to Supabase RLS.
+## Still required before a complete public release
+- Device testing on real Android and iOS devices, including account creation, email confirmation, password reset and session expiry.
+- Image/video picker, compression, upload to Supabase Storage, media rendering and moderation.
+- Full profile detail screens, pagination, filtering and robust empty/loading/error states.
+- Community creation, member lists, feed filtering and role/moderation tools.
+- Complete notification generation and deep links.
+- Reporting/blocking UI and moderator workflow.
+- Direct messaging is intentionally not exposed yet. The existing live database contains conversation RLS expressions that compare columns to themselves instead of correlating to the row being checked. A proposed correction is in `native/supabase/migrations/202611060001_secure_conversation_rls.sql`; it has **not** been applied to the live database. It needs staging tests and an invitation/consent flow before messaging is enabled.
+- App icons, splash screens, accessibility, privacy disclosures, age-appropriate safeguards, performance and security review.
+- Release signing: Android requires the owner's signing keystore and secure GitHub secrets. iOS App Store distribution requires an Apple Developer account and signing credentials.
 
-The existing database has legacy messaging RLS policies whose conversation-participant checks are not correctly correlated to the row being accessed. The native app must not expose direct messaging until those policies are reviewed and corrected with a dedicated migration and regression tests. This native branch does not alter the live database.
+## Build workflows
+- **Native Android build** creates a debug APK artifact in GitHub Actions.
+- **Native iOS build** creates an unsigned iOS Simulator app ZIP. It is not an installable App Store IPA.
+- Artifacts are temporary GitHub Actions artifacts and expire after 14 days.
 
-## Current implementation status
-This is the initial native foundation, not a completed store-ready release. Authentication and feed are the first vertical slice. Profile editing, publishing/media upload, likes, comments, search, follows, projects, communities, notifications, reporting/blocking, and secure messaging still need implementation and device-level testing.
+## Package identifiers
+- Android: `com.skillect.app`
+- iOS: `com.skillect.app`
