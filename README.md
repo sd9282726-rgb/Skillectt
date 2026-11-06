@@ -1,94 +1,70 @@
 # Skillect
 
-**A growth-focused social platform** where people discover interests, develop skills, share ideas, showcase projects, track progress, and connect with others who are learning and building.
+Skillect is an India-first social platform concept for teenagers to share what they are learning, build skills, publish projects, and connect with peers. Accounts and activity must be real; the app must not seed fake users or fake engagement.
 
-> Worldwide platform for students, creators, developers, designers, freelancers, and lifelong learners.
+## Repository layout
 
----
+- `native/android/` — native Android application (Kotlin + Jetpack Compose).
+- `native/ios/` — native iOS application (SwiftUI).
+- The root web application is a legacy surface and is not the native-app release target.
+- Supabase provides authentication, PostgreSQL, Storage, and Edge Functions.
 
-## Status (Nov 2026)
+## Current native feature implementation
 
-| Area | Status |
-|------|--------|
-| GitHub as source of truth | ✅ |
-| Supabase backend (Auth + DB + Storage + RLS) | ✅ |
-| Email-only authentication + verification | ✅ |
-| Password reset | ✅ |
-| Profiles + onboarding | ✅ |
-| Create posts (text + image/video upload) | ✅ |
-| Feed | ✅ |
-| Like / unlike | ✅ |
-| Comments | ✅ |
-| Follow / unfollow | ✅ |
-| Explore + search people | ✅ |
-| View other users | ✅ |
-| Edit own profile | ✅ |
-| Core Replit removal | ✅ |
-| White + blue design on key screens | ✅ |
-| Mobile native app | ⏳ Not started |
-| App Store / Play Store packaging | ⏳ Pending |
-| Messages / Communities | ⏳ Legacy (not fully migrated) |
+The Android and iOS clients include authentication, feed, profiles, follows, comments, projects, communities, one-to-one conversations, in-app notifications, account restriction/appeal screens, reporting/blocking, and moderator review screens.
 
----
+The backend includes participant-scoped conversation access, account enforcement, text/media moderation gateways, report evidence, moderator audit records, and notification delivery infrastructure.
 
-## Tech Stack
+## Release status — 6 November 2026
 
-- **Frontend**: Vite + React 19 + Tailwind + Radix UI + Wouter
-- **Backend**: Supabase (Auth, PostgreSQL, Storage, RLS)
-- **Auth**: Email + password only (mandatory email confirmation)
-- **Storage**: `post-media` bucket for images/videos
+**Not production-ready. Do not publish or describe this build as a finished release.**
 
----
+- Android CI currently verifies a debug APK. A signed production APK/AAB has not been produced because the release keystore and passwords are not configured.
+- iOS CI currently targets an unsigned simulator app. A signed device archive / App Store package has not been produced because Apple signing assets and provisioning are not configured.
+- Text and image moderation fail closed until the Sightengine secrets are configured and tested.
+- Android push delivery requires Firebase client configuration and the service-account secret. iOS remote push is intentionally not included.
+- Hindi/Hinglish moderation coverage, specialist child-safety/grooming detection, video moderation, realtime messaging, device-level end-to-end tests, two-account RLS tests, and scheduled evidence-retention cleanup remain incomplete.
+- Supabase Auth leaked-password protection is currently flagged as disabled by the security advisor.
+- Moderator access requires a trusted `app_metadata.role` value; do not use user-editable metadata for authorization.
 
-## Setup
+## Required production configuration
 
-### 1. Clone
+Configure secrets in the appropriate provider dashboards; never commit them to the repository.
 
-```bash
-git clone https://github.com/sd9282726-rgb/Skillectt.git
-cd Skillectt
-pnpm install
-```
+### Android release signing (GitHub Actions)
 
-### 2. Environment
+- `KEYSTORE_BASE64`
+- `KEYSTORE_PASSWORD`
+- `KEY_ALIAS`
+- `KEY_PASSWORD`
 
-```bash
-cp .env.example .env
-```
+Run the **Native Android build** workflow with `build_type=signed-release` after these are configured. Keep the keystore and passwords private and backed up. Losing the signing key can prevent future app updates.
 
-```
-VITE_SUPABASE_URL=https://chohswyxsckpwyzlbzav.supabase.co
-VITE_SUPABASE_ANON_KEY=<your-anon-key>
-```
+### Text and image moderation (Supabase Edge Function secrets)
 
-### 3. Run
+- `SIGHTENGINE_API_USER`
+- `SIGHTENGINE_API_SECRET`
 
-```bash
-pnpm --filter @workspace/skillect run dev
-```
+Publishing remains fail-closed until the service is configured and tested, including Hindi/Hinglish samples and teen-safety cases.
 
----
+### Android push (GitHub Actions and Supabase)
 
-## Working features
+- GitHub Actions: `FIREBASE_API_KEY`, `FIREBASE_APP_ID`, `FIREBASE_PROJECT_ID`, `FIREBASE_SENDER_ID`
+- Supabase Edge Function secret: `FIREBASE_SERVICE_ACCOUNT_JSON`
 
-1. Sign up → email confirmation → login / logout
-2. Onboarding (name, bio, skills)
-3. Create posts with categories, tags, and **direct image/video upload**
-4. Feed with likes
-5. Post detail + comments
-6. Profile + edit profile
-7. Explore people + follow/unfollow
-8. View other user profiles
+Do not add service-account JSON or signing material to source control.
 
----
+### iOS distribution
 
-## Notes
+A valid Apple Developer team, distribution certificate, provisioning profile, and App Store Connect configuration are required for a signed device/App Store build. Simulator builds are not installable production packages.
 
-- Never commit `.env` or service role keys
-- Mobile app and store packaging remain the largest open items
-- Some legacy pages (Messages, Communities) still need full cleanup
+## Safety and release policy
 
----
+- No fake or seeded user accounts.
+- Prohibited sexual content, exploitation, grooming, self-harm encouragement, violence, and other unsafe content must be blocked and escalated appropriately.
+- Moderation must fail closed when its provider is unavailable.
+- Do not launch to minors until child-safety coverage, age/consent requirements, moderation escalation, reporting, retention, and human review have been validated.
+- Keep the pull request in draft until release builds, security checks, RLS tests, and real-device tests pass.
 
 ## License
 
