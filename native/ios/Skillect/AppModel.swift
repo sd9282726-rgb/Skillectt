@@ -160,6 +160,15 @@ final class AppModel: ObservableObject {
         do {
             let reports = try await request(path: "/rest/v1/reports?select=id,reporter_id,target_type,target_id,reason,details,status,created_at&status=eq.pending&order=created_at.asc&limit=100")
             moderationReports = try JSONDecoder().decode([ModerationReport].self, from: reports)
+            for index in moderationReports.indices.prefix(25) {
+                let report = moderationReports[index]
+                let table = report.target_type == "post" ? "posts" : (report.target_type == "comment" ? "comments" : "")
+                if !table.isEmpty {
+                    let contentData = try await request(path: "/rest/v1/\\(table)?select=content&id=eq.\\(report.target_id)&limit=1")
+                    let contentRows = try JSONSerialization.jsonObject(with: contentData) as? [[String: String]] ?? []
+                    if let content = contentRows.first?["content"] { moderationReports[index].details = "Reported content: " + content }
+                }
+            }
             let appeals = try await request(path: "/rest/v1/moderation_appeals?select=id,user_id,enforcement_user_id,explanation,status,created_at&status=in.(pending,under_review)&order=created_at.asc&limit=100")
             moderationAppeals = try JSONDecoder().decode([ModerationAppeal].self, from: appeals)
             errorMessage = nil
