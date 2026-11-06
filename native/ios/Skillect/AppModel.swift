@@ -147,6 +147,16 @@ final class AppModel: ObservableObject {
         } catch { errorMessage = error.localizedDescription }
     }
 
+
+    func hideReportedPost(_ report: ModerationReport) async {
+        guard isModerator, report.target_type == "post" else { return }
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["moderation_hidden": true])
+            _ = try await request(path: "/rest/v1/posts?id=eq.\(report.target_id)", method: "PATCH", body: body, prefer: "return=minimal")
+            await resolveReport(report)
+        } catch { errorMessage = error.localizedDescription }
+    }
+
     func permanentlyBanReportedUser(_ report: ModerationReport) async {
         guard isModerator, let moderatorId = userId else { return }
         do {
