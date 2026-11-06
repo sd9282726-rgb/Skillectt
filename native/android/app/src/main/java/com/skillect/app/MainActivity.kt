@@ -152,14 +152,25 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         } catch(e:Exception) { error=e.message }
     }
 
+
+    suspend fun hideReportedComment(row:ModerationRow) {
+        val active=token ?: return
+        if(!isModerator || row.targetType!="comment") return
+        try {
+            api("PATCH","/rest/v1/comments?id=eq."+row.targetId,active,JSONObject().put("moderation_hidden",true))
+            resolveModerationReport(row)
+        } catch(e:Exception) { error=e.message }
+    }
+
     suspend fun banReportedAccount(row:ModerationRow) {
         val active=token ?: return
         val moderator=userId ?: return
         try {
             var target=row.targetId
-            if(row.targetType=="post") {
-                val post=apiArray("/rest/v1/posts?select=author_id&id=eq."+row.targetId+"&limit=1",active)
-                target=post.optJSONObject(0)?.optString("author_id") ?: error("Could not identify post author")
+            if(row.targetType=="post" || row.targetType=="comment") {
+                val table=if(row.targetType=="post") "posts" else "comments"
+                val content=apiArray("/rest/v1/"+table+"?select=author_id&id=eq."+row.targetId+"&limit=1",active)
+                target=content.optJSONObject(0)?.optString("author_id") ?: error("Could not identify content author")
             }
             api("POST","/rest/v1/account_enforcements",active,JSONObject().put("user_id",target).put("status","permanent").put("reason","Moderator action from report: "+row.reason).put("issued_by",moderator))
             resolveModerationReport(row)
@@ -599,6 +610,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                                         Row {
                                             TextButton(onClick={scope.launch{resolveModerationReport(row)}}){Text("Resolve")}
                                             if(row.targetType=="post") TextButton(onClick={scope.launch{hideReportedPost(row)}}){Text("Hide post")}
+                                            if(row.targetType=="comment") TextButton(onClick={scope.launch{hideReportedComment(row)}}){Text("Hide comment")}
                                             TextButton(onClick={scope.launch{banReportedAccount(row)}}){Text("Permanently ban",color=Color.Red)}
                                         }
                                     }
