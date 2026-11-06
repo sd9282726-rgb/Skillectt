@@ -1,6 +1,14 @@
 package com.skillect.app
 
 import android.os.Bundle
+import android.Manifest
+import android.content.pm.PackageManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
+import com.google.firebase.FirebaseApp
+import com.google.firebase.FirebaseOptions
+import com.google.firebase.messaging.FirebaseMessaging
 import android.net.Uri
 import android.util.Base64
 import android.content.Context
@@ -50,8 +58,34 @@ data class ChatMessage(val id:String,val senderId:String,val content:String)
 data class ModerationRow(val id:String,val title:String,val detail:String,val targetId:String,val targetType:String,val reason:String)
 
 class MainActivity : ComponentActivity() {
+
+    private fun configureFirebase() {
+        if (FirebaseApp.getApps(this).isNotEmpty()) return
+        val apiKey=BuildConfig.FIREBASE_API_KEY
+        val appId=BuildConfig.FIREBASE_APP_ID
+        val projectId=BuildConfig.FIREBASE_PROJECT_ID
+        val senderId=BuildConfig.FIREBASE_SENDER_ID
+        if(apiKey.isBlank() || appId.isBlank() || projectId.isBlank() || senderId.isBlank()) return
+        val options=FirebaseOptions.Builder()
+            .setApiKey(apiKey).setApplicationId(appId).setProjectId(projectId).setGcmSenderId(senderId).build()
+        FirebaseApp.initializeApp(this,options)
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel=NotificationChannel("skillect_activity","Skillect activity",NotificationManager.IMPORTANCE_DEFAULT)
+            channel.description="Messages and account activity"
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configureFirebase()
+        createNotificationChannel()
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 7301)
+        }
         val prefs = getSharedPreferences("skillect-session", MODE_PRIVATE)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(primary = Blue, background = SkillectBlack, surface = SkillectBlack)) {
@@ -216,6 +250,17 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             userId = u.optString("id").takeIf { it.isNotBlank() }
             isModerator = hasModeratorRole(active)
             val id = userId ?: return
+            if (FirebaseApp.getApps(context).isNotEmpty()) {
+                FirebaseMessaging.getInstance().token.addOnSuccessListener { fcmToken ->
+                    scope.launch {
+                        try {
+                            api("POST", "/rest/v1/device_tokens?on_conflict=platform,token", active,
+                                JSONObject().put("user_id", id).put("platform", "android").put("token", fcmToken),
+                                "resolution=merge-duplicates,return=minimal")
+                        } catch (e: Exception) { error = e.message }
+                    }
+                }
+            }
             val enforcement = apiArray("/rest/v1/account_enforcements?select=status,reason&user_id=eq.$id&limit=1", active)
             if (enforcement.length() > 0) {
                 val row = enforcement.getJSONObject(0)
