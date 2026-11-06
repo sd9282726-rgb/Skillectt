@@ -3,10 +3,10 @@
 
 begin;
 
--- Create a profile for every newly-created Auth user. This is necessary because
--- Supabase may require email confirmation, in which case signup returns no
--- access token with which the mobile client could insert its own profile.
-create or replace function public.handle_new_skillect_user()
+-- The live database already has an auth.users trigger calling public.handle_new_user().
+-- Replace that function in place; do not add a second trigger, which would attempt
+-- a duplicate profiles insert for each signup.
+create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
@@ -29,17 +29,22 @@ begin
     requested_display_name := coalesce(nullif(split_part(coalesce(new.email, ''), '@', 1), ''), 'New member');
   end if;
 
-  insert into public.profiles (id, email, display_name, username)
-  values (new.id, new.email, requested_display_name, safe_username);
+  insert into public.profiles (id, email, display_name, username, avatar_url)
+  values (
+    new.id,
+    new.email,
+    requested_display_name,
+    safe_username,
+    coalesce(new.raw_user_meta_data ->> 'avatar_url', '')
+  );
 
   return new;
 end;
 $$;
 
-drop trigger if exists on_auth_user_created_skillect_profile on auth.users;
-create trigger on_auth_user_created_skillect_profile
-after insert on auth.users
-for each row execute procedure public.handle_new_skillect_user();
+revoke all on function public.handle_new_user() from public;
+revoke all on function public.handle_new_user() from anon;
+revoke all on function public.handle_new_user() from authenticated;
 
 -- Conversations are visible only to their participants. The prior live
 -- predicates compared columns to themselves or compared conversation_id to
