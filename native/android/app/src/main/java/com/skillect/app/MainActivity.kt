@@ -388,14 +388,14 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             }},
             bottomBar={
                 NavigationBar(containerColor=SkillectBlack,contentColor=MutedNav,tonalElevation=0.dp) {
-                    listOf("Feed","Explore","Communities","Create","Messages","Profile").forEach { item ->
+                    listOf("Feed","Explore","Communities","Create","Messages","Notifications","Profile").forEach { item ->
                         NavigationBarItem(
                             selected=tab==item,
                             onClick={
                                 tab=item
-                                if(item=="Communities") scope.launch { loadCommunities() }
+                                if(item=="Communities") scope.launch { loadCommunities() }; if(item=="Notifications") scope.launch { loadNotifications() }
                             },
-                            icon={Text(when(item){"Feed"->"⌂";"Explore"->"◈";"Communities"->"♧";"Create"->"⊞";"Messages"->"○";else->"♙"},fontSize=25.sp)},
+                            icon={Text(when(item){"Feed"->"⌂";"Explore"->"◈";"Communities"->"♧";"Create"->"⊞";"Messages"->"○";"Notifications"->"♧";else->"♙"},fontSize=25.sp)},
                             label={Text(item,fontSize=10.sp)},
                             colors=NavigationBarItemDefaults.colors(selectedIconColor=Blue,selectedTextColor=Blue,unselectedIconColor=MutedNav,unselectedTextColor=MutedNav,indicatorColor=SkillectBlack)
                         )
