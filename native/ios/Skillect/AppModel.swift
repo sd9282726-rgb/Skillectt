@@ -219,7 +219,7 @@ final class AppModel: ObservableObject {
             directory = try JSONDecoder().decode([DirectoryProfile].self, from: profilesData)
             currentProfile = directory.first(where: { $0.id == userId })
             if let me = userId {
-                let followData = try await request(path: "/rest/v1/follows?select=following_id&follower_id=eq.\\(me)")
+                let followData = try await request(path: "/rest/v1/follows?select=following_id&follower_id=eq.\(me)")
                 let followRows = try JSONSerialization.jsonObject(with: followData) as? [[String: String]] ?? []
                 followingIds = Set(followRows.compactMap { $0["following_id"] })
             }
@@ -282,7 +282,7 @@ final class AppModel: ObservableObject {
         guard let me = userId, me != targetId else { return }
         do {
             if followingIds.contains(targetId) {
-                _ = try await request(path: "/rest/v1/follows?follower_id=eq.\\(me)&following_id=eq.\\(targetId)", method: "DELETE", prefer: "return=minimal")
+                _ = try await request(path: "/rest/v1/follows?follower_id=eq.\(me)&following_id=eq.\(targetId)", method: "DELETE", prefer: "return=minimal")
                 followingIds.remove(targetId)
             } else {
                 let body = try JSONSerialization.data(withJSONObject: ["follower_id": me, "following_id": targetId])
