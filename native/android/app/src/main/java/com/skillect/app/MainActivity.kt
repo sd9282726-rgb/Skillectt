@@ -678,6 +678,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                     loadNotifications()
                     loadConversations()
                     activeConversationId?.let { loadChatMessages(it) }
+                    showCommentsFor?.let { loadComments(it) }
                 }
             }
             realtime.connect()
