@@ -680,7 +680,10 @@ final class AppModel: ObservableObject {
     private func startRealtime() {
         guard let token = accessToken else { return }
         realtimeTask?.cancel()
-        realtimeTask = Task { [weak self] in await self?.runRealtime(token: token) }
+        realtimeTask = Task { [weak self] in
+            guard let self else { return }
+            await self.runRealtime(token: token)
+        }
     }
 
     private func stopRealtime() {
