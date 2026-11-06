@@ -36,6 +36,30 @@ struct FeedComment: Decodable, Identifiable {
     let content: String
     let profiles: PostProfile?
 }
+struct DirectoryProfile: Decodable, Identifiable {
+    let id: String
+    let display_name: String
+    let username: String
+    let bio: String
+}
+struct NativeProject: Decodable, Identifiable {
+    let id: String
+    let title: String
+    let description: String
+    let status: String
+}
+struct NativeCommunity: Decodable, Identifiable {
+    let id: String
+    let name: String
+    let description: String
+    let member_count: Int
+}
+struct NativeNotification: Decodable, Identifiable {
+    let id: String
+    let type: String
+    let message: String?
+    let read: Bool
+}
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -45,6 +69,11 @@ final class AppModel: ObservableObject {
     @Published var likedIds: Set<String> = []
     @Published var savedIds: Set<String> = []
     @Published var comments: [FeedComment] = []
+    @Published var directory: [DirectoryProfile] = []
+    @Published var projects: [NativeProject] = []
+    @Published var communities: [NativeCommunity] = []
+    @Published var notifications: [NativeNotification] = []
+    @Published var currentProfile: DirectoryProfile?
     @Published var isBusy = false
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -61,6 +90,7 @@ final class AppModel: ObservableObject {
             userId = auth.user.id
             Keychain.save(auth.access_token)
             await loadFeed()
+            await loadDirectory()
         } catch { errorMessage = error.localizedDescription }
     }
 
@@ -140,7 +170,58 @@ final class AppModel: ObservableObject {
         } catch { errorMessage = error.localizedDescription }
     }
 
-    func signOut() {
+
+    func loadDirectory() async {
+        do {
+            let profilesData = try await request(path: "/rest/v1/profiles?select=id,display_name,username,bio&order=created_at.desc&limit=100")
+            directory = try JSONDecoder().decode([DirectoryProfile].self, from: profilesData)
+            currentProfile = directory.first(where: { $0.id == userId })
+            let projectData = try await request(path: "/rest/v1/projects?select=id,title,description,status&order=created_at.desc&limit=100")
+            projects = try JSONDecoder().decode([NativeProject].self, from: projectData)
+            let communityData = try await request(path: "/rest/v1/communities?select=id,name,description,member_count&order=created_at.desc&limit=100")
+            communities = try JSONDecoder().decode([NativeCommunity].self, from: communityData)
+            if let me = userId {
+                let notificationData = try await request(path: "/rest/v1/notifications?select=id,type,message,read&user_id=eq.\(me)&order=created_at.desc&limit=50")
+                notifications = try JSONDecoder().decode([NativeNotification].self, from: notificationData)
+            }
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func updateProfile(displayName: String, bio: String) async {
+        guard let me = userId else { return }
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["display_name": displayName, "bio": bio])
+            _ = try await request(path: "/rest/v1/profiles?id=eq.\(me)", method: "PATCH", body: body, prefer: "return=minimal")
+            await loadDirectory()
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func createProject(title: String, description: String) async {
+        guard let me = userId, !title.isEmpty, !description.isEmpty else { return }
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["author_id": me, "title": title, "description": description, "status": "in_progress"])
+            _ = try await request(path: "/rest/v1/projects", method: "POST", body: body, prefer: "return=minimal")
+            await loadDirectory()
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func joinCommunity(_ communityId: String) async {
+        guard let me = userId else { return }
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["community_id": communityId, "user_id": me])
+            _ = try await request(path: "/rest/v1/community_members", method: "POST", body: body, prefer: "return=minimal")
+            await loadDirectory()
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func markNotificationRead(_ id: String) async {
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["read": true])
+            _ = try await request(path: "/rest/v1/notifications?id=eq.\(id)", method: "PATCH", body: body, prefer: "return=minimal")
+            await loadDirectory()
+        } catch { errorMessage = error.localizedDescription }
+    }
+\n    func signOut() {
         accessToken = nil
         userId = nil
         posts = []
