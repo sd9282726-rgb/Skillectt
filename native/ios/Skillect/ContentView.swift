@@ -327,25 +327,9 @@ struct CreateView: View {
                 Label("Photo uploads paused until automated safety screening is connected", systemImage: "shield.lefthalf.filled")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                .onChange(of: selectedPhoto) { _, item in
-                    Task {
-                        guard let item else { selectedImageData = nil; return }
-                        do {
-                            selectedImageData = try await item.loadTransferable(type: Data.self)
-                            selectedImageMime = item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg"
-                        } catch { model.errorMessage = error.localizedDescription }
-                    }
-                }
-                if selectedImageData != nil {
-                    HStack {
-                        Label("Image ready to upload", systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(.secondary)
-                        Spacer()
-                        Button("Remove") { selectedPhoto = nil; selectedImageData = nil }
-                    }
-                }
                 Button {
                     Task {
-                        await model.createPost(text, imageData: selectedImageData, imageMime: selectedImageMime)
+                        await model.createPost(text)
                         if model.errorMessage == nil { text = ""; selectedPhoto = nil; selectedImageData = nil }
                     }
                 } label: {
@@ -353,7 +337,7 @@ struct CreateView: View {
                         .frame(maxWidth: .infinity).padding(.vertical, 13)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled((text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedImageData == nil) || model.isBusy)
+                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isBusy)
                 if let error = model.errorMessage { Text(error).font(.caption).foregroundStyle(.red) }
                 Spacer()
             }.padding().navigationTitle("Create")
