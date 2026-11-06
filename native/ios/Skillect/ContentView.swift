@@ -242,7 +242,11 @@ private struct PostCard: View {
                 Spacer()
                 Menu {
                     Button("Save post", systemImage: "bookmark") { Task { await model.toggleSave(post) } }
-                    Button("Report post", systemImage: "flag") { Task { await model.reportPost(post.id) } }
+                    Button("Sexual content or nudity", systemImage: "exclamationmark.shield") { Task { await model.reportPost(post.id, reason: "sexual_content_or_nudity") } }
+                    Button("Harassment or hate", systemImage: "hand.raised") { Task { await model.reportPost(post.id, reason: "harassment_or_hate") } }
+                    Button("Violence or self-harm", systemImage: "exclamationmark.triangle") { Task { await model.reportPost(post.id, reason: "violence_or_self_harm") } }
+                    Button("Spam or scam", systemImage: "flag") { Task { await model.reportPost(post.id, reason: "spam_or_scam") } }
+                    Button("Other", systemImage: "ellipsis") { Task { await model.reportPost(post.id, reason: "other") } }
                 } label: { Image(systemName: "ellipsis").foregroundStyle(.secondary).padding(8) }
             }
             Text(post.content).foregroundStyle(Color.primary).frame(maxWidth: .infinity, alignment: .leading)
