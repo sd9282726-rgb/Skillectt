@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       build_type:
-        description: "debug or signed-release"
+        description: "debug or signed-release (requires upload keystore secrets)"
         required: true
         type: choice
         options:
-          - debug
           - signed-release
-        default: debug
+          - debug
+        default: signed-release
   pull_request:
     branches:
       - main
@@ -24,8 +24,8 @@ on:
       - ".github/workflows/native-android.yml"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
