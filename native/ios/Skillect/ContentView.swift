@@ -126,14 +126,10 @@ struct MainTabs: View {
             .padding(.horizontal, 22).frame(height: 72)
             .background(skillectBlack)
             TabView {
-                FeedView(model: model).tabItem { Label("Feed", systemImage: "house") }
+                FeedView(model: model).tabItem { Label("Home", systemImage: "house") }
                 ExploreView(model: model).tabItem { Label("Explore", systemImage: "safari") }
-                CommunitiesView(model: model).tabItem { Label("Communities", systemImage: "person.3") }
                 CreateView(model: model).tabItem { Label("Create", systemImage: "plus.square") }
-                MessagesView(model: model).tabItem { Label("Messages", systemImage: "bubble.left") }
-                NotificationsView(model: model).tabItem { Label("Alerts", systemImage: "bell") }
                 ProfileView(model: model).tabItem { Label("Profile", systemImage: "person") }
-                if model.isModerator { ModerationView(model: model).tabItem { Label("Moderation", systemImage: "shield.lefthalf.filled") } }
             }
             .toolbarBackground(skillectBlack, for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
@@ -619,6 +615,14 @@ struct ProfileView: View {
                 Section("Your activity") {
                     LabeledContent("Posts", value: "\(model.posts.filter { $0.authorId == model.userId }.count)")
                     LabeledContent("Projects", value: "\(model.projects.filter { $0.id.isEmpty == false }.count)")
+                }
+                Section("Your spaces") {
+                    NavigationLink("Messages") { MessagesView(model: model) }
+                    NavigationLink("Communities") { CommunitiesView(model: model) }
+                    NavigationLink("Notifications") { NotificationsView(model: model) }
+                    if model.isModerator {
+                        NavigationLink("Safety moderation") { ModerationView(model: model) }
+                    }
                 }
                 Section {
                     Button("Sign out", role: .destructive) { model.signOut() }
