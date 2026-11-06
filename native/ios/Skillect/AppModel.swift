@@ -164,7 +164,7 @@ final class AppModel: ObservableObject {
                 let report = moderationReports[index]
                 let table = report.target_type == "post" ? "posts" : (report.target_type == "comment" ? "comments" : "")
                 if !table.isEmpty {
-                    let contentData = try await request(path: "/rest/v1/\\(table)?select=content&id=eq.\\(report.target_id)&limit=1")
+                    let contentData = try await request(path: "/rest/v1/\(table)?select=content&id=eq.\(report.target_id)&limit=1")
                     let contentRows = try JSONSerialization.jsonObject(with: contentData) as? [[String: String]] ?? []
                     if let content = contentRows.first?["content"] { moderationReports[index].details = "Reported content: " + content }
                 }
