@@ -55,7 +55,7 @@ private const val KEY = BuildConfig.SUPABASE_KEY
 data class Post(val id: String, val authorId: String, val body: String, val author: String, val handle: String, val image: String?, val likes: Int, val comments: Int)
 data class SimpleItem(val id: String, val title: String, val detail: String)
 data class ChatMessage(val id:String,val senderId:String,val content:String)
-data class ModerationRow(val id:String,val title:String,val detail:String,val targetId:String,val targetType:String,val reason:String)
+data class ModerationRow(val id:String,val title:String,val detail:String,val targetId:String,val targetType:String,val reason:String,val targetUserId:String?=null)
 
 class MainActivity : ComponentActivity() {
 
@@ -154,10 +154,10 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         val active=token ?: return
         if(!isModerator) { error="Moderator access is required."; return }
         try {
-            val reports=apiArray("/rest/v1/reports?select=id,target_type,target_id,reason,details,status&status=eq.pending&order=created_at.asc&limit=100",active)
+            val reports=apiArray("/rest/v1/reports?select=id,target_type,target_id,target_user_id,reason,details,status&status=eq.pending&order=created_at.asc&limit=100",active)
             moderationReports=(0 until reports.length()).map { i ->
                 val r=reports.getJSONObject(i)
-                ModerationRow(r.optString("id"),r.optString("target_type")+" · "+r.optString("reason"),r.optString("details"),r.optString("target_id"),r.optString("target_type"),r.optString("reason"))
+                ModerationRow(r.optString("id"),r.optString("target_type")+" · "+r.optString("reason"),r.optString("details"),r.optString("target_id"),r.optString("target_type"),r.optString("reason"),r.optString("target_user_id").takeIf{it.isNotBlank()})
             }
             moderationReports=moderationReports.take(25).map { row ->
                 if(row.targetType=="post" || row.targetType=="comment") {
@@ -208,8 +208,8 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         val active=token ?: return
         val moderator=userId ?: return
         try {
-            var target=row.targetId
-            if(row.targetType=="post" || row.targetType=="comment") {
+            var target=row.targetUserId ?: row.targetId
+            if(row.targetUserId==null && (row.targetType=="post" || row.targetType=="comment")) {
                 val table=if(row.targetType=="post") "posts" else "comments"
                 val content=apiArray("/rest/v1/"+table+"?select=author_id&id=eq."+row.targetId+"&limit=1",active)
                 target=content.optJSONObject(0)?.optString("author_id") ?: error("Could not identify content author")
@@ -417,6 +417,17 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             tab="Messages"
             error=null
         } catch(e:Exception){ error=e.message }
+    }
+
+
+    suspend fun reportChatMessage(message:ChatMessage) {
+        val active=token ?: return
+        val me=userId ?: return
+        if(message.senderId==me) return
+        try {
+            api("POST","/rest/v1/reports",active,JSONObject().put("reporter_id",me).put("target_type","message").put("target_id",message.id).put("target_user_id",message.senderId).put("reason","inappropriate_message"))
+            error="Message reported for moderator review."
+        } catch(e:Exception) { error=e.message }
     }
 
     suspend fun sendChatMessage() {
@@ -799,6 +810,10 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                                     Row(Modifier.fillMaxWidth(),horizontalArrangement=if(mine)Arrangement.End else Arrangement.Start) {
                                         Card(colors=CardDefaults.cardColors(containerColor=if(mine)Color(0xFF173D38) else Color(0xFF252530))) {
                                             Text(m.content,Modifier.padding(12.dp),color=Ink)
+                                        }
+                                        if(!mine) Column {
+                                            TextButton(onClick={scope.launch{reportChatMessage(m)}}){Text("Report",fontSize=10.sp,color=Color.Gray)}
+                                            TextButton(onClick={scope.launch{blockUser(m.senderId);activeConversationId=null;loadConversations()}}){Text("Block",fontSize=10.sp,color=Color.Red)}
                                         }
                                     }
                                 }
