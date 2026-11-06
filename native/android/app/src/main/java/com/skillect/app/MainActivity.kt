@@ -402,7 +402,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     suspend fun loadCommunities() {
         val active = token ?: return
         try {
-            val arr = apiArray("/rest/v1/communities?select=id,name,description,member_count&order=created_at.desc&limit=40", active)
+            val arr = apiArray("/rest/v1/communities?select=id,name,description,member_count&created_by=not.is.null&order=created_at.desc&limit=40", active)
             communities = (0 until arr.length()).map { val p=arr.getJSONObject(it); SimpleItem(p.optString("id"),p.optString("name"),p.optString("description")) }
             val me=userId
             if(me!=null) {
@@ -754,7 +754,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             }},
             bottomBar={
                 NavigationBar(containerColor=SkillectBlack,contentColor=MutedNav,tonalElevation=0.dp) {
-                    (listOf("Feed","Explore","Communities","Create","Messages","Notifications","Profile") + if(isModerator) listOf("Moderation") else emptyList()).forEach { item ->
+                    listOf("Feed","Explore","Create","Profile").forEach { item ->
                         NavigationBarItem(
                             selected=tab==item,
                             onClick={
@@ -905,6 +905,13 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         OutlinedTextField(bio,{bio=it},label={Text("Bio")},modifier=Modifier.fillMaxWidth(),maxLines=4)
                         Button(onClick={scope.launch{updateProfile()}}){Text("Save profile")}
                         Text("Posts: ${posts.count{it.authorId==userId}}",modifier=Modifier.padding(top=14.dp))
+                        Divider(Modifier.padding(vertical=12.dp), color=Color(0xFF292936))
+                        Text("Your spaces",fontWeight=FontWeight.Bold,color=Ink)
+                        OutlinedButton(onClick={tab="Messages";scope.launch{loadConversations()}},modifier=Modifier.fillMaxWidth()){Text("Messages")}
+                        OutlinedButton(onClick={tab="Communities";scope.launch{loadCommunities()}},modifier=Modifier.fillMaxWidth()){Text("Communities")}
+                        OutlinedButton(onClick={tab="Notifications";scope.launch{loadNotifications()}},modifier=Modifier.fillMaxWidth()){Text("Notifications")}
+                        OutlinedButton(onClick={tab="Projects"},modifier=Modifier.fillMaxWidth()){Text("Projects")}
+                        if(isModerator) OutlinedButton(onClick={tab="Moderation";scope.launch{loadModerationQueue()}},modifier=Modifier.fillMaxWidth()){Text("Safety moderation")}
                         TextButton(onClick={scope.launch{loadFeed()}}){Text("Refresh profile")}
                         TextButton(onClick={signOutUser()}){Text("Sign out",color=Color.Red)}
                     }
@@ -942,7 +949,8 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                     }
                     "Communities" -> LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
                         item { Text("Communities",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink) }
-                        items(communities){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);Button(onClick={scope.launch{joinCommunity(item.id)}},enabled=!joinedCommunityIds.contains(item.id),modifier=Modifier.padding(top=6.dp)){Text(if(joinedCommunityIds.contains(item.id)) "Joined" else "Join")}}} }
+                        if(communities.isEmpty()) item { Text("No member-created communities yet. Check back as learners start their own spaces.",color=Color.Gray,modifier=Modifier.padding(top=16.dp)) }
+                        items(communities){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold,color=Ink);Text(item.detail,color=Color.Gray);Button(onClick={scope.launch{joinCommunity(item.id)}},enabled=!joinedCommunityIds.contains(item.id),modifier=Modifier.padding(top=6.dp)){Text(if(joinedCommunityIds.contains(item.id)) "Joined" else "Join")}}} }
                     }
                     "Notifications" -> LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
                         item { Text("Notifications",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink) }
