@@ -387,7 +387,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         val active = token ?: return
         val me = userId ?: return
         try {
-            api("PATCH", "/rest/v1/profiles?id=eq.$me", active, JSONObject().put("display_name", displayName).put("bio", bio))
+            api("POST", "/functions/v1/moderate-text", active, JSONObject().put("type", "profile").put("display_name", displayName).put("bio", bio))
             loadUser()
         } catch (e: Exception) { error = e.message }
     }
@@ -468,7 +468,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         val content=messageDraft.trim()
         if(content.isEmpty()) return
         try {
-            api("POST","/rest/v1/messages",active,JSONObject().put("conversation_id",conversationId).put("sender_id",me).put("content",content))
+            api("POST","/functions/v1/moderate-text",active,JSONObject().put("type","message").put("conversation_id",conversationId).put("content",content))
             messageDraft=""
             loadChatMessages(conversationId)
         } catch(e:Exception){ error=e.message }
@@ -562,8 +562,8 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         }
         busy=true
         try {
-            val body=JSONObject().put("author_id",author).put("content",createText.trim()).put("tags",JSONArray())
-            api("POST","/rest/v1/posts",active,body)
+            val body=JSONObject().put("type","post").put("content",createText.trim()).put("tags",JSONArray())
+            api("POST","/functions/v1/moderate-text",active,body)
             createText=""
             selectedMediaUri=null
             selectedMediaName=null
@@ -626,7 +626,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         val me=userId ?: return
         if(commentText.isBlank()) return
         try {
-            api("POST","/rest/v1/comments",active,JSONObject().put("post_id",postId).put("author_id",me).put("content",commentText.trim()))
+            api("POST","/functions/v1/moderate-text",active,JSONObject().put("type","comment").put("post_id",postId).put("content",commentText.trim()))
             commentText=""
             loadComments(postId)
             loadFeed()
