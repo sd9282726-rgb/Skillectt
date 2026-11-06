@@ -180,6 +180,26 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         } catch (e: Exception) { error = e.message }
     }
 
+
+    suspend fun reportPost(post: Post) {
+        val active=token ?: return
+        val me=userId ?: return
+        try {
+            api("POST","/rest/v1/reports",active,JSONObject().put("reporter_id",me).put("target_type","post").put("target_id",post.id).put("reason","inappropriate_content"))
+            error="Report submitted for review"
+        } catch(e:Exception){ error=e.message }
+    }
+
+    suspend fun blockUser(targetId:String) {
+        val active=token ?: return
+        val me=userId ?: return
+        if(targetId==me) return
+        try {
+            api("POST","/rest/v1/blocks",active,JSONObject().put("blocker_id",me).put("blocked_id",targetId))
+            results=results.filterNot{it.id==targetId}
+        } catch(e:Exception){ error=e.message }
+    }
+
     suspend fun searchPeople() {
         val active=token ?: return
         if (searchText.isBlank()) { results=emptyList(); return }
@@ -318,7 +338,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                                         Row(Modifier.fillMaxWidth().padding(top=10.dp),horizontalArrangement=Arrangement.SpaceBetween) {
                                             TextButton(onClick={scope.launch{toggleLike(post)}}){Text((if(likedIds.contains(post.id)) "♥ " else "♡ ")+post.likes)}
                                             TextButton(onClick={scope.launch{showCommentsFor=post.id;loadComments(post.id)}}){Text("Comments ${post.comments}")}
-                                            TextButton(onClick={scope.launch{toggleSave(post)}}){Text(if(savedIds.contains(post.id)) "Saved" else "Save")}
+                                            TextButton(onClick={scope.launch{toggleSave(post)}}){Text(if(savedIds.contains(post.id)) "Saved" else "Save")}\n                                            TextButton(onClick={scope.launch{reportPost(post)}}){Text("Report")}
                                         }
                                     }
                                 }
@@ -329,7 +349,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         Text("Find your people",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
                         OutlinedTextField(searchText,{searchText=it},label={Text("Search by name or username")},modifier=Modifier.fillMaxWidth())
                         Button(onClick={scope.launch{searchPeople()}},modifier=Modifier.padding(top=8.dp)){Text("Search")}
-                        LazyColumn { items(results){ item -> Card(Modifier.fillMaxWidth().padding(vertical=5.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray)}} } }
+                        LazyColumn { items(results){ item -> Card(Modifier.fillMaxWidth().padding(vertical=5.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);TextButton(onClick={scope.launch{blockUser(item.id)}}){Text("Block")}}} } }
                     }
                     "Create" -> Column(Modifier.fillMaxSize().padding(16.dp)) {
                         Text("Share your progress",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
