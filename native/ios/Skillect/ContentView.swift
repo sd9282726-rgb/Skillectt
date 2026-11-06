@@ -324,9 +324,9 @@ struct CreateView: View {
                     .frame(minHeight: 180)
                     .padding(8)
                     .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.gray.opacity(0.2)))
-                PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                    Label(selectedImageData == nil ? "Choose an image" : "Change image", systemImage: "photo")
-                }
+                Label("Photo uploads paused until automated safety screening is connected", systemImage: "shield.lefthalf.filled")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 .onChange(of: selectedPhoto) { _, item in
                     Task {
                         guard let item else { selectedImageData = nil; return }
