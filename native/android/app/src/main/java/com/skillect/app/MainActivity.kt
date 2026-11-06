@@ -132,6 +132,16 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         } catch(e:Exception) { error=e.message }
     }
 
+
+    suspend fun hideReportedPost(row:ModerationRow) {
+        val active=token ?: return
+        if(!isModerator || row.targetType!="post") return
+        try {
+            api("PATCH","/rest/v1/posts?id=eq."+row.targetId,active,JSONObject().put("moderation_hidden",true))
+            resolveModerationReport(row)
+        } catch(e:Exception) { error=e.message }
+    }
+
     suspend fun banReportedAccount(row:ModerationRow) {
         val active=token ?: return
         val moderator=userId ?: return
@@ -538,6 +548,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                                         Text("Target: "+row.targetId,fontSize=11.sp,color=Color.Gray)
                                         Row {
                                             TextButton(onClick={scope.launch{resolveModerationReport(row)}}){Text("Resolve")}
+                                            if(row.targetType=="post") TextButton(onClick={scope.launch{hideReportedPost(row)}}){Text("Hide post")}
                                             TextButton(onClick={scope.launch{banReportedAccount(row)}}){Text("Permanently ban",color=Color.Red)}
                                         }
                                     }
