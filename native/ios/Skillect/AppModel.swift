@@ -104,6 +104,37 @@ final class AppModel: ObservableObject {
         } catch { errorMessage = error.localizedDescription }
     }
 
+    func signUp(email: String, password: String, displayName: String, username: String) async {
+        isBusy = true
+        errorMessage = nil
+        defer { isBusy = false }
+        do {
+            let metadata: [String: Any] = ["display_name": displayName.trimmingCharacters(in: .whitespacesAndNewlines), "username": username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()]
+            let body = try JSONSerialization.data(withJSONObject: ["email": email.trimmingCharacters(in: .whitespacesAndNewlines), "password": password, "data": metadata])
+            let result = try await request(path: "/auth/v1/signup", method: "POST", body: body, authenticated: false)
+            if let auth = try? JSONDecoder().decode(AuthResponse.self, from: result) {
+                accessToken = auth.access_token
+                userId = auth.user.id
+                Keychain.save(auth.access_token)
+                await loadFeed()
+                await loadDirectory()
+            } else {
+                errorMessage = "Account created. Check your email if confirmation is enabled, then sign in."
+            }
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func sendPasswordReset(email: String) async {
+        isBusy = true
+        errorMessage = nil
+        defer { isBusy = false }
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["email": email.trimmingCharacters(in: .whitespacesAndNewlines)])
+            _ = try await request(path: "/auth/v1/recover", method: "POST", body: body, authenticated: false)
+            errorMessage = "If an account exists for this email, password reset instructions have been sent."
+        } catch { errorMessage = error.localizedDescription }
+    }
+
     func loadFeed() async {
         guard accessToken != nil else { return }
         isLoading = true
