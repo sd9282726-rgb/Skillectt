@@ -79,7 +79,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                 val arr = apiArray("/rest/v1/posts?select=id,content,image_url,profiles(display_name,username)&order=created_at.desc&limit=40", token!!)
                 posts = (0 until arr.length()).map { i ->
                     val p = arr.getJSONObject(i); val profile = p.optJSONObject("profiles") ?: JSONObject()
-                    Post(p.optString("id"), p.optString("content"), profile.optString("display_name", "Skillect member"), profile.optString("username", "member"), p.optString("image_url").ifBlank { null })
+                    Post(p.optString("id"), p.optString("content"), profile.optString("display_name", "Skillect member"), profile.optString("username", "member"), p.optString("image_url").takeIf { it.isNotBlank() })
                 }
             } catch (e: Exception) { error = e.message ?: "Could not load feed" }
         }
