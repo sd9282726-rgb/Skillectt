@@ -185,14 +185,25 @@ final class AppModel: ObservableObject {
         } catch { errorMessage = error.localizedDescription }
     }
 
+
+    func hideReportedComment(_ report: ModerationReport) async {
+        guard isModerator, report.target_type == "comment" else { return }
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["moderation_hidden": true])
+            _ = try await request(path: "/rest/v1/comments?id=eq.\(report.target_id)", method: "PATCH", body: body, prefer: "return=minimal")
+            await resolveReport(report)
+        } catch { errorMessage = error.localizedDescription }
+    }
+
     func permanentlyBanReportedUser(_ report: ModerationReport) async {
         guard isModerator, let moderatorId = userId else { return }
         do {
             var targetUserId = report.target_id
-            if report.target_type == "post" {
-                let data = try await request(path: "/rest/v1/posts?select=author_id&id=eq.\(report.target_id)&limit=1")
+            if report.target_type == "post" || report.target_type == "comment" {
+                let table = report.target_type == "post" ? "posts" : "comments"
+                let data = try await request(path: "/rest/v1/\(table)?select=author_id&id=eq.\(report.target_id)&limit=1")
                 let rows = try JSONSerialization.jsonObject(with: data) as? [[String: String]] ?? []
-                guard let author = rows.first?["author_id"] else { throw NSError(domain: "Skillect", code: 2, userInfo: [NSLocalizedDescriptionKey: "Could not identify the post author"]) }
+                guard let author = rows.first?["author_id"] else { throw NSError(domain: "Skillect", code: 2, userInfo: [NSLocalizedDescriptionKey: "Could not identify the content author"]) }
                 targetUserId = author
             }
             let body = try JSONSerialization.data(withJSONObject: ["user_id": targetUserId, "status": "permanent", "reason": "Moderator action from report: \(report.reason)", "issued_by": moderatorId])
