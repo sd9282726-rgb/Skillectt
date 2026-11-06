@@ -75,7 +75,7 @@ private struct PostCard: View {
                 Spacer()
                 Menu {
                     Button("Save post", systemImage: "bookmark") { Task { await model.toggleSave(post) } }
-                    Button("Report post", systemImage: "flag") {}
+                    Button("Report post", systemImage: "flag") { Task { await model.reportPost(post.id) } }
                 } label: { Image(systemName: "ellipsis").foregroundStyle(.secondary).padding(8) }
             }
             Text(post.content).foregroundStyle(Color.primary).frame(maxWidth: .infinity, alignment: .leading)
