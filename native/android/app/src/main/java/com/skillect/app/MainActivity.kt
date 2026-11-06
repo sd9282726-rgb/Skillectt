@@ -160,7 +160,11 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                 ModerationRow(r.optString("id"),r.optString("target_type")+" · "+r.optString("reason"),r.optString("details"),r.optString("target_id"),r.optString("target_type"),r.optString("reason"),r.optString("target_user_id").takeIf{it.isNotBlank()})
             }
             moderationReports=moderationReports.take(25).map { row ->
-                if(row.targetType=="post" || row.targetType=="comment") {
+                if(row.targetType=="message") {
+                    val evidence=apiArray("/rest/v1/moderation_evidence?select=content_snapshot&report_id=eq."+row.id+"&limit=1",active)
+                    val preview=evidence.optJSONObject(0)?.optString("content_snapshot")
+                    if(!preview.isNullOrBlank()) row.copy(detail="Reported message: "+preview) else row
+                } else if(row.targetType=="post" || row.targetType=="comment") {
                     val table=if(row.targetType=="post") "posts" else "comments"
                     val content=apiArray("/rest/v1/"+table+"?select=content&id=eq."+row.targetId+"&limit=1",active)
                     val preview=content.optJSONObject(0)?.optString("content")
