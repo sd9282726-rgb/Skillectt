@@ -400,16 +400,16 @@ final class AppModel: ObservableObject {
         errorMessage = nil
         infoMessage = nil
         defer { isBusy = false }
-        let boundary = "SkillectBoundary-\\(UUID().uuidString)"
+        let boundary = "SkillectBoundary-\(UUID().uuidString)"
         var body = Data()
         func append(_ value: String) { body.append(Data(value.utf8)) }
         let safeName = fileName.replacingOccurrences(of: "\"", with: "")
-        append("--\\(boundary)\\r\\nContent-Disposition: form-data; name=\"content\"\\r\\n\\r\\n\\(content.trimmingCharacters(in: .whitespacesAndNewlines))\\r\\n")
-        append("--\\(boundary)\\r\\nContent-Disposition: form-data; name=\"file\"; filename=\"\\(safeName)\"\\r\\nContent-Type: \\(mimeType)\\r\\n\\r\\n")
+        append("--\(boundary)\r\nContent-Disposition: form-data; name=\"content\"\r\n\r\n\(content.trimmingCharacters(in: .whitespacesAndNewlines))\r\n")
+        append("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(safeName)\"\r\nContent-Type: \(mimeType)\r\n\r\n")
         body.append(videoData)
-        append("\\r\\n--\\(boundary)--\\r\\n")
+        append("\r\n--\(boundary)--\r\n")
         do {
-            _ = try await request(path: "/functions/v1/submit-video-post", method: "POST", body: body, contentType: "multipart/form-data; boundary=\\(boundary)")
+            _ = try await request(path: "/functions/v1/submit-video-post", method: "POST", body: body, contentType: "multipart/form-data; boundary=\(boundary)")
             infoMessage = "Video submitted for moderator review. It will appear in the feed after approval."
         } catch { errorMessage = error.localizedDescription }
     }
