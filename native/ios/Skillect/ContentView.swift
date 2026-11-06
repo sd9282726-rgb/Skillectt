@@ -338,7 +338,7 @@ struct CommunitiesView: View {
                     HStack {
                         Text("\(community.member_count) members").font(.caption).foregroundStyle(.secondary)
                         Spacer()
-                        Button("Join") { Task { await model.joinCommunity(community.id) } }.buttonStyle(.bordered)
+                        Button(model.joinedCommunityIds.contains(community.id) ? "Joined" : "Join") { Task { await model.joinCommunity(community.id) } }.buttonStyle(.bordered).disabled(model.joinedCommunityIds.contains(community.id))
                     }
                 }.padding(.vertical, 5)
             }.navigationTitle("Communities").task { await model.loadDirectory() }
