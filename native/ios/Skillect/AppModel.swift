@@ -70,6 +70,7 @@ final class AppModel: ObservableObject {
     @Published var savedIds: Set<String> = []
     @Published var comments: [FeedComment] = []
     @Published var directory: [DirectoryProfile] = []
+    @Published var followingIds: Set<String> = []
     @Published var projects: [NativeProject] = []
     @Published var communities: [NativeCommunity] = []
     @Published var notifications: [NativeNotification] = []
@@ -217,6 +218,11 @@ final class AppModel: ObservableObject {
             let profilesData = try await request(path: "/rest/v1/profiles?select=id,display_name,username,bio&order=created_at.desc&limit=100")
             directory = try JSONDecoder().decode([DirectoryProfile].self, from: profilesData)
             currentProfile = directory.first(where: { $0.id == userId })
+            if let me = userId {
+                let followData = try await request(path: "/rest/v1/follows?select=following_id&follower_id=eq.\\(me)")
+                let followRows = try JSONSerialization.jsonObject(with: followData) as? [[String: String]] ?? []
+                followingIds = Set(followRows.compactMap { $0["following_id"] })
+            }
             let projectData = try await request(path: "/rest/v1/projects?select=id,title,description,status&order=created_at.desc&limit=100")
             projects = try JSONDecoder().decode([NativeProject].self, from: projectData)
             let communityData = try await request(path: "/rest/v1/communities?select=id,name,description,member_count&order=created_at.desc&limit=100")
@@ -275,13 +281,13 @@ final class AppModel: ObservableObject {
     func toggleFollow(_ targetId: String) async {
         guard let me = userId, me != targetId else { return }
         do {
-            let existing = try await request(path: "/rest/v1/follows?select=id&follower_id=eq.\(me)&following_id=eq.\(targetId)")
-            let rows = try JSONSerialization.jsonObject(with: existing) as? [[String: String]] ?? []
-            if let row = rows.first, let id = row["id"] {
-                _ = try await request(path: "/rest/v1/follows?id=eq.\(id)", method: "DELETE", prefer: "return=minimal")
+            if followingIds.contains(targetId) {
+                _ = try await request(path: "/rest/v1/follows?follower_id=eq.\\(me)&following_id=eq.\\(targetId)", method: "DELETE", prefer: "return=minimal")
+                followingIds.remove(targetId)
             } else {
                 let body = try JSONSerialization.data(withJSONObject: ["follower_id": me, "following_id": targetId])
                 _ = try await request(path: "/rest/v1/follows", method: "POST", body: body, prefer: "return=minimal")
+                followingIds.insert(targetId)
             }
         } catch { errorMessage = error.localizedDescription }
     }
