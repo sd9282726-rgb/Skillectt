@@ -1,21 +1,61 @@
--- Secure conversation membership checks for the native clients.
--- Review and apply as a Supabase migration only after staging verification.
+-- Profile bootstrap, private conversation membership, and owned media paths.
+-- Apply only after this migration has been reviewed and tested against a staging project.
+
 begin;
 
+-- Create a profile for every newly-created Auth user. This is necessary because
+-- Supabase may require email confirmation, in which case signup returns no
+-- access token with which the mobile client could insert its own profile.
+create or replace function public.handle_new_skillect_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  requested_username text;
+  safe_username text;
+  requested_display_name text;
+begin
+  requested_username := lower(coalesce(new.raw_user_meta_data ->> 'username', ''));
+  safe_username := regexp_replace(requested_username, '[^a-z0-9_]', '', 'g');
+
+  if length(safe_username) < 3 then
+    safe_username := 'user_' || left(replace(new.id::text, '-', ''), 12);
+  end if;
+
+  requested_display_name := nullif(trim(new.raw_user_meta_data ->> 'display_name'), '');
+  if requested_display_name is null then
+    requested_display_name := coalesce(nullif(split_part(coalesce(new.email, ''), '@', 1), ''), 'New member');
+  end if;
+
+  insert into public.profiles (id, email, display_name, username)
+  values (new.id, new.email, requested_display_name, safe_username);
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created_skillect_profile on auth.users;
+create trigger on_auth_user_created_skillect_profile
+after insert on auth.users
+for each row execute procedure public.handle_new_skillect_user();
+
+-- Conversations are visible only to their participants. The prior live
+-- predicates compared columns to themselves or compared conversation_id to
+-- participant row id, which did not enforce membership correctly.
 alter table public.conversations
   add column if not exists created_by uuid references auth.users(id);
 
 alter table public.conversations
   alter column created_by set default auth.uid();
 
--- SECURITY DEFINER avoids recursive RLS when participant policies need to
--- check whether the current user already belongs to the conversation.
 create or replace function public.is_conversation_participant(_conversation_id uuid)
 returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = ''
 as $$
   select exists (
     select 1
@@ -30,18 +70,24 @@ grant execute on function public.is_conversation_participant(uuid) to authentica
 
 drop policy if exists "Participants visible to members" on public.conversation_participants;
 drop policy if exists "Users can join conversations" on public.conversation_participants;
+drop policy if exists "Members can view their conversation participants" on public.conversation_participants;
+drop policy if exists "Conversation members can add participants" on public.conversation_participants;
 drop policy if exists "Authenticated can create conversations" on public.conversations;
 drop policy if exists "Users can view conversations they are in" on public.conversations;
+drop policy if exists "Users can view conversations they belong to" on public.conversations;
+drop policy if exists "Authenticated users create conversations as themselves" on public.conversations;
 drop policy if exists "Messages visible to participants" on public.messages;
 drop policy if exists "Participants can send messages" on public.messages;
+drop policy if exists "Only conversation participants can read messages" on public.messages;
+drop policy if exists "Only participants can send messages as themselves" on public.messages;
 
 create policy "Members can view their conversation participants"
 on public.conversation_participants
 for select to authenticated
 using (public.is_conversation_participant(conversation_id));
 
--- Existing participants can add another participant. The client should
--- implement an explicit invite/accept flow before exposing group messaging.
+-- A conversation creator can add the initial participants; existing
+-- participants can add invitees. The app must still implement invite/accept UI.
 create policy "Conversation members can add participants"
 on public.conversation_participants
 for insert to authenticated
@@ -78,6 +124,40 @@ for insert to authenticated
 with check (
   sender_id = auth.uid()
   and public.is_conversation_participant(conversation_id)
+);
+
+-- Restrict post-media uploads and replacements to a path rooted at the
+-- authenticated user's UUID. Public read is intentional for public posts.
+drop policy if exists "Authenticated users can upload post-media" on storage.objects;
+drop policy if exists "Users can delete own post-media" on storage.objects;
+drop policy if exists "Users can update own post-media" on storage.objects;
+
+create policy "Users upload post-media into their own folder"
+on storage.objects
+for insert to authenticated
+with check (
+  bucket_id = 'post-media'
+  and (storage.foldername(name))[1] = (select auth.uid())::text
+);
+
+create policy "Users delete their own post-media"
+on storage.objects
+for delete to authenticated
+using (
+  bucket_id = 'post-media'
+  and (storage.foldername(name))[1] = (select auth.uid())::text
+);
+
+create policy "Users update their own post-media"
+on storage.objects
+for update to authenticated
+using (
+  bucket_id = 'post-media'
+  and (storage.foldername(name))[1] = (select auth.uid())::text
+)
+with check (
+  bucket_id = 'post-media'
+  and (storage.foldername(name))[1] = (select auth.uid())::text
 );
 
 commit;
