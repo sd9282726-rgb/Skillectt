@@ -296,10 +296,10 @@ final class AppModel: ObservableObject {
         } catch { errorMessage = error.localizedDescription }
     }
 
-    func reportPost(_ postId: String) async {
+    func reportPost(_ postId: String, reason: String = "inappropriate_content") async {
         guard let me = userId else { return }
         do {
-            let body = try JSONSerialization.data(withJSONObject: ["reporter_id": me, "target_type": "post", "target_id": postId, "reason": "inappropriate_content"])
+            let body = try JSONSerialization.data(withJSONObject: ["reporter_id": me, "target_type": "post", "target_id": postId, "reason": reason])
             _ = try await request(path: "/rest/v1/reports", method: "POST", body: body, prefer: "return=minimal")
         } catch { errorMessage = error.localizedDescription }
     }
