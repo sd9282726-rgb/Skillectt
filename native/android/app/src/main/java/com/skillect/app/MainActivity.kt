@@ -494,6 +494,16 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         } catch(e:Exception){ error=e.message }
     }
 
+
+    suspend fun reportComment(commentId:String) {
+        val active=token ?: return
+        val me=userId ?: return
+        try {
+            api("POST","/rest/v1/reports",active,JSONObject().put("reporter_id",me).put("target_type","comment").put("target_id",commentId).put("reason","inappropriate_content"))
+            error="Comment reported for moderator review."
+        } catch(e:Exception) { error=e.message }
+    }
+
     suspend fun addComment(postId:String) {
         val active=token ?: return
         val me=userId ?: return
@@ -745,7 +755,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             text={
                 Column {
                     LazyColumn(Modifier.heightIn(max=280.dp)) {
-                        items(comments){ c -> Column(Modifier.padding(vertical=5.dp)){Text(c.title,fontWeight=FontWeight.Bold);Text(c.detail)} }
+                        items(comments){ c -> Column(Modifier.padding(vertical=5.dp)){Text(c.title,fontWeight=FontWeight.Bold);Text(c.detail);TextButton(onClick={scope.launch{reportComment(c.id)}}){Text("Report comment",color=Color.Gray)}} }
                     }
                     OutlinedTextField(commentText,{commentText=it},label={Text("Write a comment")},modifier=Modifier.fillMaxWidth())
                 }
