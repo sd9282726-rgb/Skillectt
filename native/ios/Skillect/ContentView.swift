@@ -484,16 +484,22 @@ struct CommunitiesView: View {
     @ObservedObject var model: AppModel
     var body: some View {
         NavigationStack {
-            List(model.communities) { community in
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(community.name).font(.headline)
-                    Text(community.description).foregroundStyle(.secondary)
-                    HStack {
-                        Text("\(community.member_count) members").font(.caption).foregroundStyle(.secondary)
-                        Spacer()
-                        Button(model.joinedCommunityIds.contains(community.id) ? "Joined" : "Join") { Task { await model.joinCommunity(community.id) } }.buttonStyle(.bordered).disabled(model.joinedCommunityIds.contains(community.id))
+            Group {
+                if model.communities.isEmpty {
+                    ContentUnavailableView("No communities yet", systemImage: "person.3", description: Text("These spaces will appear when learners create real communities. Placeholder groups are hidden."))
+                } else {
+                    List(model.communities) { community in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(community.name).font(.headline)
+                            Text(community.description).foregroundStyle(.secondary)
+                            HStack {
+                                Text("\(community.member_count) members").font(.caption).foregroundStyle(.secondary)
+                                Spacer()
+                                Button(model.joinedCommunityIds.contains(community.id) ? "Joined" : "Join") { Task { await model.joinCommunity(community.id) } }.buttonStyle(.bordered).disabled(model.joinedCommunityIds.contains(community.id))
+                            }
+                        }.padding(.vertical, 5)
                     }
-                }.padding(.vertical, 5)
+                }
             }.navigationTitle("Communities").task { await model.loadDirectory() }
         }
     }
