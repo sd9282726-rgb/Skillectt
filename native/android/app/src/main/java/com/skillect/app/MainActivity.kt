@@ -338,7 +338,8 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                                         Row(Modifier.fillMaxWidth().padding(top=10.dp),horizontalArrangement=Arrangement.SpaceBetween) {
                                             TextButton(onClick={scope.launch{toggleLike(post)}}){Text((if(likedIds.contains(post.id)) "♥ " else "♡ ")+post.likes)}
                                             TextButton(onClick={scope.launch{showCommentsFor=post.id;loadComments(post.id)}}){Text("Comments ${post.comments}")}
-                                            TextButton(onClick={scope.launch{toggleSave(post)}}){Text(if(savedIds.contains(post.id)) "Saved" else "Save")}\n                                            TextButton(onClick={scope.launch{reportPost(post)}}){Text("Report")}
+                                            TextButton(onClick={scope.launch{toggleSave(post)}}){Text(if(savedIds.contains(post.id)) "Saved" else "Save")}
+                                            TextButton(onClick={scope.launch{reportPost(post)}}){Text("Report")}
                                         }
                                     }
                                 }
