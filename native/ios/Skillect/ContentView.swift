@@ -1,5 +1,7 @@
 import SwiftUI
 import UIKit
+import PhotosUI
+import UniformTypeIdentifiers
 
 private let skillectBlue = Color(red: 0.0, green: 0.78, blue: 0.47)
 private let skillectBlack = Color(red: 0.02, green: 0.02, blue: 0.035)
@@ -204,23 +206,48 @@ struct FeedView: View {
 struct CreateView: View {
     @ObservedObject var model: AppModel
     @State private var text = ""
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var selectedImageData: Data?
+    @State private var selectedImageMime = "image/jpeg"
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Share what you're learning, making or discovering.")
                     .foregroundStyle(.secondary)
                 TextEditor(text: $text)
-                    .frame(minHeight: 220)
+                    .frame(minHeight: 180)
                     .padding(8)
                     .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.gray.opacity(0.2)))
+                PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                    Label(selectedImageData == nil ? "Choose an image" : "Change image", systemImage: "photo")
+                }
+                .onChange(of: selectedPhoto) { _, item in
+                    Task {
+                        guard let item else { selectedImageData = nil; return }
+                        do {
+                            selectedImageData = try await item.loadTransferable(type: Data.self)
+                            selectedImageMime = item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg"
+                        } catch { model.errorMessage = error.localizedDescription }
+                    }
+                }
+                if selectedImageData != nil {
+                    HStack {
+                        Label("Image ready to upload", systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Remove") { selectedPhoto = nil; selectedImageData = nil }
+                    }
+                }
                 Button {
-                    Task { await model.createPost(text); if model.errorMessage == nil { text = "" } }
+                    Task {
+                        await model.createPost(text, imageData: selectedImageData, imageMime: selectedImageMime)
+                        if model.errorMessage == nil { text = ""; selectedPhoto = nil; selectedImageData = nil }
+                    }
                 } label: {
                     HStack { if model.isBusy { ProgressView().tint(.white) }; Text("Publish post").fontWeight(.semibold) }
                         .frame(maxWidth: .infinity).padding(.vertical, 13)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isBusy)
+                .disabled((text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedImageData == nil) || model.isBusy)
                 if let error = model.errorMessage { Text(error).font(.caption).foregroundStyle(.red) }
                 Spacer()
             }.padding().navigationTitle("Create")
