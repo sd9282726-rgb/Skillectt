@@ -1090,6 +1090,31 @@ private fun hasModeratorRole(token:String):Boolean {
     } catch(_:Exception) { false }
 }
 
+private suspend fun submitVideoPost(context:Context, uri:Uri, token:String, caption:String) = withContext(Dispatchers.IO) {
+    val mime=context.contentResolver.getType(uri) ?: error("Could not identify video type")
+    require(mime in setOf("video/mp4","video/webm","video/quicktime")) { "Choose an MP4, WebM or MOV video" }
+    val bytes=context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: error("Could not read selected video")
+    require(bytes.isNotEmpty() && bytes.size <= 50 * 1024 * 1024) { "Video must be 50 MB or smaller" }
+    val ext=when(mime) { "video/mp4" -> "mp4"; "video/webm" -> "webm"; else -> "mov" }
+    val multipart=MultipartBody.Builder().setType(MultipartBody.FORM)
+        .addFormDataPart("content",caption)
+        .addFormDataPart("file","skillect-video.$ext",bytes.toRequestBody(mime.toMediaType()))
+        .build()
+    val request=Request.Builder()
+        .url("$URL/functions/v1/submit-video-post")
+        .addHeader("apikey",KEY)
+        .addHeader("Authorization","Bearer $token")
+        .post(multipart)
+        .build()
+    client.newCall(request).execute().use { response ->
+        val text=response.body?.string().orEmpty()
+        if(!response.isSuccessful) {
+            val message=try { JSONObject(text).optString("error","Video upload failed (\${response.code})") } catch(_:Exception) { "Video upload failed" }
+            throw IllegalStateException(message)
+        }
+    }
+}
+
 private suspend fun uploadPostMedia(context:Context, uri:Uri, token:String, userId:String):String = withContext(Dispatchers.IO) {
     val mime=context.contentResolver.getType(uri) ?: "image/jpeg"
     require(mime.startsWith("image/")) { "Choose an image file" }
