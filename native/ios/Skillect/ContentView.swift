@@ -548,6 +548,16 @@ struct ModerationView: View {
      ForEach(model.moderationMediaCases) { item in
       VStack(alignment:.leading,spacing:8) {
        Text("Rejected image · " + (item.decision_reason ?? "Safety screening")).font(.headline)
+       if let preview = item.preview_url, let previewURL = URL(string: preview) {
+        AsyncImage(url: previewURL) { phase in
+         switch phase {
+         case .success(let image): image.resizable().scaledToFit()
+         case .failure: Text("Preview unavailable").foregroundStyle(.secondary)
+         case .empty: ProgressView()
+         @unknown default: EmptyView()
+         }
+        }.frame(maxWidth: .infinity).frame(maxHeight: 240)
+       }
        Text("Account: \\(item.owner_id)").font(.caption).foregroundStyle(.secondary)
        HStack {
         Button("Mark reviewed") { Task { await model.reviewMediaCase(item,ban:false) } }.buttonStyle(.bordered)
