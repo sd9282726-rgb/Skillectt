@@ -221,6 +221,7 @@ struct ExploreView: View {
                                     if following.contains(person.id) { following.remove(person.id) } else { following.insert(person.id) }
                                 }
                             }.buttonStyle(.bordered)
+                            Button("Block") { Task { await model.blockUser(person.id) } }.buttonStyle(.bordered)
                         }
                     }
                 }.listStyle(.plain)
