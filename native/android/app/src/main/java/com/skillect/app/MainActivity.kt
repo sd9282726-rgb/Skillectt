@@ -77,6 +77,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     var followingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var projects by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
     var communities by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
+    var joinedCommunityIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var displayName by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var bio by remember { mutableStateOf("") }
@@ -135,6 +136,11 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         try {
             val arr = apiArray("/rest/v1/communities?select=id,name,description,member_count&order=created_at.desc&limit=40", active)
             communities = (0 until arr.length()).map { val p=arr.getJSONObject(it); SimpleItem(p.optString("id"),p.optString("name"),p.optString("description")) }
+            val me=userId
+            if(me!=null) {
+                val joined=apiArray("/rest/v1/community_members?select=community_id&user_id=eq.$me",active)
+                joinedCommunityIds=(0 until joined.length()).map { joined.getJSONObject(it).optString("community_id") }.toSet()
+            }
         } catch (e: Exception) { error=e.message }
     }
 
@@ -155,7 +161,9 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         val active = token ?: return
         val me = userId ?: return
         try {
+            if(joinedCommunityIds.contains(id)) return
             api("POST", "/rest/v1/community_members", active, JSONObject().put("community_id", id).put("user_id", me))
+            joinedCommunityIds=joinedCommunityIds+id
             error = null
         } catch (e: Exception) { error = e.message }
     }
@@ -439,7 +447,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                     "Messages" -> Spacer(Modifier.fillMaxSize())
                     "Communities" -> LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
                         item { Text("Communities",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink) }
-                        items(communities){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);Button(onClick={scope.launch{joinCommunity(item.id)}},modifier=Modifier.padding(top=6.dp)){Text("Join")}}} }
+                        items(communities){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);Button(onClick={scope.launch{joinCommunity(item.id)}},enabled=!joinedCommunityIds.contains(item.id),modifier=Modifier.padding(top=6.dp)){Text(if(joinedCommunityIds.contains(item.id)) "Joined" else "Join")}}} }
                     }
                     "Notifications" -> LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
                         item { Text("Notifications",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink) }
