@@ -214,6 +214,20 @@ final class AppModel: ObservableObject {
         } catch { errorMessage = error.localizedDescription }
     }
 
+    func toggleFollow(_ targetId: String) async {
+        guard let me = userId, me != targetId else { return }
+        do {
+            let existing = try await request(path: "/rest/v1/follows?select=id&follower_id=eq.\(me)&following_id=eq.\(targetId)")
+            let rows = try JSONSerialization.jsonObject(with: existing) as? [[String: String]] ?? []
+            if let row = rows.first, let id = row["id"] {
+                _ = try await request(path: "/rest/v1/follows?id=eq.\(id)", method: "DELETE", prefer: "return=minimal")
+            } else {
+                let body = try JSONSerialization.data(withJSONObject: ["follower_id": me, "following_id": targetId])
+                _ = try await request(path: "/rest/v1/follows", method: "POST", body: body, prefer: "return=minimal")
+            }
+        } catch { errorMessage = error.localizedDescription }
+    }
+
     func markNotificationRead(_ id: String) async {
         do {
             let body = try JSONSerialization.data(withJSONObject: ["read": true])
