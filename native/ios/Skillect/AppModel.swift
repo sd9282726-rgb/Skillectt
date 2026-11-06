@@ -389,7 +389,7 @@ final class AppModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
-            let data = try await request(path: "/rest/v1/posts?select=id,author_id,content,image_url,likes_count,comments_count,profiles(display_name,username)&order=created_at.desc&limit=50")
+            let data = try await request(path: "/rest/v1/posts?select=id,author_id,content,image_url,media_type,likes_count,comments_count,profiles(display_name,username)&order=created_at.desc&limit=50")
             posts = try JSONDecoder().decode([FeedPost].self, from: data)
             if let me = userId {
                 let likes = try await request(path: "/rest/v1/post_likes?select=post_id&user_id=eq.\(me)")
