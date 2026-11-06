@@ -1,6 +1,10 @@
 package com.skillect.app
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.widget.VideoView
+import android.widget.MediaController
 import android.Manifest
 import android.content.pm.PackageManager
 import android.app.NotificationChannel
@@ -32,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -40,6 +45,9 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.MultipartBody
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
@@ -52,7 +60,51 @@ private val client = OkHttpClient()
 private const val URL = BuildConfig.SUPABASE_URL
 private const val KEY = BuildConfig.SUPABASE_KEY
 
-data class Post(val id: String, val authorId: String, val body: String, val author: String, val handle: String, val image: String?, val likes: Int, val comments: Int)
+private class RealtimeSocket(private val token: String, private val onChange: () -> Unit) {
+    private val handler = Handler(Looper.getMainLooper())
+    private var socket: WebSocket? = null
+    private var stopped = false
+    private var ref = 1
+    private val heartbeat = object : Runnable {
+        override fun run() {
+            if (stopped) return
+            socket?.send(JSONObject().put("topic", "phoenix").put("event", "heartbeat").put("payload", JSONObject()).put("ref", (ref++).toString()).toString())
+            handler.postDelayed(this, 25_000)
+        }
+    }
+    fun connect() {
+        if (stopped) return
+        val wsUrl = URL.replace("https://", "wss://") + "/realtime/v1/websocket?apikey=" + URLEncoder.encode(KEY, "UTF-8") + "&vsn=1.0.0"
+        socket = client.newWebSocket(Request.Builder().url(wsUrl).build(), object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
+                val changes = JSONArray()
+                listOf("posts", "comments", "messages", "notifications").forEach { table ->
+                    changes.put(JSONObject().put("event", "*").put("schema", "public").put("table", table))
+                }
+                val config = JSONObject()
+                    .put("broadcast", JSONObject().put("ack", false).put("self", false))
+                    .put("presence", JSONObject().put("enabled", false))
+                    .put("postgres_changes", changes)
+                    .put("private", false)
+                val payload = JSONObject().put("config", config).put("access_token", token)
+                webSocket.send(JSONObject().put("topic", "realtime:skillect-mvp").put("event", "phx_join").put("payload", payload).put("ref", "1").put("join_ref", "1").toString())
+                handler.removeCallbacks(heartbeat)
+                handler.postDelayed(heartbeat, 25_000)
+            }
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                try {
+                    if (JSONObject(text).optString("event") == "postgres_changes") handler.post { if (!stopped) onChange() }
+                } catch (_: Exception) {}
+            }
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { handler.removeCallbacks(heartbeat); reconnect() }
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: okhttp3.Response?) { handler.removeCallbacks(heartbeat); reconnect() }
+        })
+    }
+    private fun reconnect() { if (!stopped) handler.postDelayed({ connect() }, 4_000) }
+    fun close() { stopped = true; handler.removeCallbacks(heartbeat); socket?.close(1000, "screen closed"); socket = null }
+}
+
+data class Post(val id: String, val authorId: String, val body: String, val author: String, val handle: String, val image: String?, val mediaType: String, val likes: Int, val comments: Int)
 data class SimpleItem(val id: String, val title: String, val detail: String)
 data class ChatMessage(val id:String,val senderId:String,val content:String)
 data class ModerationRow(val id:String,val title:String,val detail:String,val targetId:String,val targetType:String,val reason:String,val targetUserId:String?=null,val previewUrl:String?=null)
@@ -130,6 +182,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     var selectedMediaName by remember { mutableStateOf<String?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> selectedMediaUri = uri; selectedMediaName = uri?.lastPathSegment }
+    var successMessage by remember { mutableStateOf<String?>(null) }
     var searchText by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
     var followingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -183,10 +236,10 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                 val r=textCases.getJSONObject(i)
                 ModerationRow(r.optString("id"),r.optString("content_type")+" · "+r.optString("reason"),r.optString("content_snapshot"),r.optString("user_id"),"text_case",r.optString("reason"))
             }
-            val mediaCases=apiArray("/rest/v1/media_assets?select=id,owner_id,status,decision_reason,created_at&status=eq.rejected&reviewed_at=is.null&order=created_at.asc&limit=100",active)
+            val mediaCases=apiArray("/rest/v1/media_assets?select=id,owner_id,status,decision_reason,created_at,media_type,mime_type,post_content&status=eq.pending&media_type=eq.video&reviewed_at=is.null&order=created_at.asc&limit=100",active)
             val loadedMediaCases=(0 until mediaCases.length()).map { i ->
                 val r=mediaCases.getJSONObject(i)
-                ModerationRow(r.optString("id"),"Rejected image",r.optString("decision_reason"),r.optString("owner_id"),"media_case",r.optString("decision_reason"))
+                ModerationRow(r.optString("id"),"Pending video · "+r.optString("mime_type"),r.optString("post_content"),r.optString("owner_id"),"video_case","pending")
             }
             val withPreviews=mutableListOf<ModerationRow>()
             for(row in loadedMediaCases) {
@@ -244,6 +297,17 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     }
 
 
+
+    suspend fun reviewVideoCase(row:ModerationRow, approve:Boolean) {
+        val active=token ?: return
+        if(!isModerator || row.targetType!="video_case") return
+        try {
+            api("POST","/functions/v1/review-video-post",active,JSONObject().put("media_asset_id",row.id).put("decision",if(approve)"approve" else "reject"))
+            loadModerationQueue()
+            loadFeed()
+            error=if(approve) "Video approved and published." else "Video rejected."
+        } catch(e:Exception) { error=e.message }
+    }
 
     suspend fun reviewModerationMediaCase(row:ModerationRow, ban:Boolean) {
         val active=token ?: return
@@ -376,10 +440,10 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     suspend fun loadFeed() {
         val active = token ?: return
         try {
-            val arr = apiArray("/rest/v1/posts?select=id,author_id,content,image_url,likes_count,comments_count,profiles(display_name,username)&order=created_at.desc&limit=50", active)
+            val arr = apiArray("/rest/v1/posts?select=id,author_id,content,image_url,media_type,likes_count,comments_count,profiles(display_name,username)&order=created_at.desc&limit=50", active)
             posts = (0 until arr.length()).map { i ->
                 val p = arr.getJSONObject(i); val profile = p.optJSONObject("profiles") ?: JSONObject()
-                Post(p.optString("id"), p.optString("author_id"), p.optString("content"), profile.optString("display_name", "Skillect member"), profile.optString("username", "member"), p.optString("image_url").takeIf { it.isNotBlank() }, p.optInt("likes_count"), p.optInt("comments_count"))
+                Post(p.optString("id"), p.optString("author_id"), p.optString("content"), profile.optString("display_name", "Skillect member"), profile.optString("username", "member"), p.optString("image_url").takeIf { it.isNotBlank() }, p.optString("media_type", "text"), p.optInt("likes_count"), p.optInt("comments_count"))
             }
             val me = userId
             if (me != null) {
@@ -605,23 +669,41 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         }
     }
 
+    DisposableEffect(token) {
+        if(token!=null) {
+            val realtime=RealtimeSocket(token) {
+                scope.launch {
+                    loadFeed()
+                    loadNotifications()
+                    loadConversations()
+                    activeConversationId?.let { loadChatMessages(it) }
+                }
+            }
+            realtime.connect()
+            onDispose { realtime.close() }
+        } else onDispose { }
+    }
+
     suspend fun createPost() {
         val active=token ?: return
-        val author=userId ?: return
-        if(createText.isBlank()) return
-        if (selectedMediaUri != null) {
-            error = "Photo publishing is paused until automated safety screening is connected."
-            return
-        }
+        if(createText.isBlank() && selectedMediaUri==null) return
         busy=true
+        successMessage=null
         try {
-            val body=JSONObject().put("type","post").put("content",createText.trim()).put("tags",JSONArray())
-            api("POST","/functions/v1/moderate-text",active,body)
+            val selected=selectedMediaUri
+            if(selected!=null) {
+                submitVideoPost(context,selected,active,createText.trim())
+                successMessage="Video submitted for moderator review. It will appear in the feed after approval."
+            } else {
+                val body=JSONObject().put("type","post").put("content",createText.trim()).put("tags",JSONArray())
+                api("POST","/functions/v1/moderate-text",active,body)
+                successMessage="Post published."
+                tab="Feed"
+                loadFeed()
+            }
             createText=""
             selectedMediaUri=null
             selectedMediaName=null
-            tab="Feed"
-            loadFeed()
             error=null
         } catch(e:Exception){ error=e.message }
         busy=false
@@ -796,18 +878,21 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                                     }
                                 }
                             }
-                            item { Text("Rejected media awaiting review",fontWeight=FontWeight.Bold,color=Ink,modifier=Modifier.padding(top=12.dp)) }
-                            if(moderationMediaCases.isEmpty()) item { Text("No rejected media cases",color=Color.Gray) }
-                            items(moderationMediaCases,key={"media-case-"+it.id}) { row ->
+                            item { Text("Videos awaiting approval",fontWeight=FontWeight.Bold,color=Ink,modifier=Modifier.padding(top=12.dp)) }
+                            if(moderationMediaCases.isEmpty()) item { Text("No videos awaiting review",color=Color.Gray) }
+                            items(moderationMediaCases,key={"video-case-"+it.id}) { row ->
                                 Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=Color(0xFF171720))) {
                                     Column(Modifier.padding(14.dp)) {
                                         Text(row.title,fontWeight=FontWeight.Bold,color=Ink)
-                                        if(row.previewUrl!=null) AsyncImage(model=row.previewUrl,contentDescription="Rejected image preview",modifier=Modifier.fillMaxWidth().heightIn(max=260.dp))
-                                        Text(row.detail,color=Ink)
+                                        if(row.previewUrl!=null) AndroidView(factory={ ctx -> VideoView(ctx).apply {
+                                            setMediaController(MediaController(ctx).also { it.setAnchorView(this) })
+                                            setVideoURI(Uri.parse(row.previewUrl))
+                                        } },modifier=Modifier.fillMaxWidth().height(240.dp))
+                                        if(row.detail.isNotBlank()) Text(row.detail,color=Ink)
                                         Text("Account: "+row.targetId,fontSize=11.sp,color=Color.Gray)
                                         Row {
-                                            TextButton(onClick={scope.launch{reviewModerationMediaCase(row,false)}}){Text("Mark reviewed")}
-                                            TextButton(onClick={scope.launch{reviewModerationMediaCase(row,true)}}){Text("Permanently ban",color=Color.Red)}
+                                            TextButton(onClick={scope.launch{reviewVideoCase(row,true)}}){Text("Approve")}
+                                            TextButton(onClick={scope.launch{reviewVideoCase(row,false)}}){Text("Reject",color=Color.Red)}
                                         }
                                     }
                                 }
@@ -856,7 +941,16 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                                         Text(post.author,fontWeight=FontWeight.Bold,color=Ink)
                                         Text("@${post.handle}",color=Color.Gray,fontSize=12.sp)
                                         Text(post.body,color=Ink,modifier=Modifier.padding(top=12.dp),lineHeight=22.sp)
-                                        post.image?.let { mediaUrl -> AsyncImage(model=mediaUrl,contentDescription="Post image",modifier=Modifier.fillMaxWidth().heightIn(max=420.dp).padding(top=10.dp),contentScale=androidx.compose.ui.layout.ContentScale.FillWidth) }
+                                        post.image?.let { mediaUrl ->
+                                            if(post.mediaType=="video") {
+                                                AndroidView(factory={ ctx -> VideoView(ctx).apply {
+                                                    setMediaController(MediaController(ctx).also { it.setAnchorView(this) })
+                                                    setVideoURI(Uri.parse(mediaUrl))
+                                                } },modifier=Modifier.fillMaxWidth().height(240.dp).padding(top=10.dp))
+                                            } else {
+                                                AsyncImage(model=mediaUrl,contentDescription="Post image",modifier=Modifier.fillMaxWidth().heightIn(max=420.dp).padding(top=10.dp),contentScale=androidx.compose.ui.layout.ContentScale.FillWidth)
+                                            }
+                                        }
                                         Row(Modifier.fillMaxWidth().padding(top=10.dp),horizontalArrangement=Arrangement.SpaceBetween) {
                                             TextButton(onClick={scope.launch{toggleLike(post)}}){Text((if(likedIds.contains(post.id)) "♥ " else "♡ ")+post.likes)}
                                             TextButton(onClick={scope.launch{showCommentsFor=post.id;loadComments(post.id)}}){Text("Comments ${post.comments}")}
@@ -886,7 +980,12 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         Text("Share your progress",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
                         OutlinedTextField(createText,{createText=it},label={Text("What are you learning or building?")},modifier=Modifier.fillMaxWidth().heightIn(min=150.dp),maxLines=8)
                         Row(verticalAlignment=Alignment.CenterVertically) {
-                            Text("Photo uploads paused until safety screening is connected",color=Color.Gray,fontSize=12.sp)
+                            Column {
+                                OutlinedButton(onClick={mediaPicker.launch("video/*")},modifier=Modifier.fillMaxWidth()) { Text(if(selectedMediaUri==null) "Choose video" else "Change video") }
+                                selectedMediaName?.let { Text("Selected: "+it,color=Color.Gray,fontSize=12.sp) }
+                                Text("MP4, WebM or MOV · up to 50 MB · videos are private until moderator approval",color=Color.Gray,fontSize=12.sp)
+                                successMessage?.let { Text(it,color=Blue,fontSize=13.sp) }
+                            }
                         }
                         Button(onClick={scope.launch{createPost()}},enabled=(createText.isNotBlank()||selectedMediaUri!=null)&&!busy,modifier=Modifier.padding(top=12.dp)){Text(if(busy)"Publishing…" else "Publish post")}
                     }
