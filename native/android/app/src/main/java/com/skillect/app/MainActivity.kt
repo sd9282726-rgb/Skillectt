@@ -1,7 +1,8 @@
 package com.skillect.app
 
 import android.os.Bundle
-import android.net.Uri\nimport android.util.Base64
+import android.net.Uri
+import android.util.Base64
 import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -45,7 +46,8 @@ private const val KEY = BuildConfig.SUPABASE_KEY
 
 data class Post(val id: String, val authorId: String, val body: String, val author: String, val handle: String, val image: String?, val likes: Int, val comments: Int)
 data class SimpleItem(val id: String, val title: String, val detail: String)
-data class ChatMessage(val id:String,val senderId:String,val content:String)\ndata class ModerationRow(val id:String,val title:String,val detail:String,val targetId:String,val targetType:String,val reason:String)
+data class ChatMessage(val id:String,val senderId:String,val content:String)
+data class ModerationRow(val id:String,val title:String,val detail:String,val targetId:String,val targetType:String,val reason:String)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,7 +75,15 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     var usernameInput by remember { mutableStateOf("") }
     var authMode by remember { mutableStateOf("Sign in") }
     var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }\n    var isModerator by remember { mutableStateOf(false) }\n    var moderationReports by remember { mutableStateOf<List<ModerationRow>>(emptyList()) }\n    var moderationAppeals by remember { mutableStateOf<List<ModerationRow>>(emptyList()) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var isRestricted by remember { mutableStateOf(false) }
+    var restrictionStatus by remember { mutableStateOf("") }
+    var restrictionReason by remember { mutableStateOf("") }
+    var appealStatus by remember { mutableStateOf<String?>(null) }
+    var appealText by remember { mutableStateOf("") }
+    var isModerator by remember { mutableStateOf(false) }
+    var moderationReports by remember { mutableStateOf<List<ModerationRow>>(emptyList()) }
+    var moderationAppeals by remember { mutableStateOf<List<ModerationRow>>(emptyList()) }
     var posts by remember { mutableStateOf<List<Post>>(emptyList()) }
     var likedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var savedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -166,19 +176,39 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         } catch(e:Exception) { error=e.message }
     }
 
+
+    suspend fun submitAccountAppeal() {
+        val active=token ?: return
+        val me=userId ?: return
+        val explanation=appealText.trim()
+        if(explanation.length<20) { error="Please explain your appeal in at least 20 characters."; return }
+        try {
+            api("POST","/rest/v1/moderation_appeals",active,JSONObject().put("user_id",me).put("enforcement_user_id",me).put("explanation",explanation))
+            appealStatus="pending"
+            appealText=""
+            error=null
+        } catch(e:Exception) { error=e.message }
+    }
+
     suspend fun loadUser() {
         val active = token ?: return
         try {
             val u = api("GET", "/auth/v1/user", active)
-            userId = u.optString("id").takeIf { it.isNotBlank() }\n            isModerator = hasModeratorRole(active)
+            userId = u.optString("id").takeIf { it.isNotBlank() }
+            isModerator = hasModeratorRole(active)
             val id = userId ?: return
             val enforcement = apiArray("/rest/v1/account_enforcements?select=status,reason&user_id=eq.$id&limit=1", active)
             if (enforcement.length() > 0) {
-                val status = enforcement.getJSONObject(0).optString("status")
-                error = if (status == "permanent") "This account has been permanently banned from Skillect." else "This account is temporarily restricted."
-                token = null
-                onSignOut()
+                val row = enforcement.getJSONObject(0)
+                isRestricted = true
+                restrictionStatus = row.optString("status")
+                restrictionReason = row.optString("reason", "No reason was provided.")
+                val appeals = apiArray("/rest/v1/moderation_appeals?select=status&user_id=eq.$id&order=created_at.desc&limit=1", active)
+                appealStatus = appeals.optJSONObject(0)?.optString("status")
                 return
+            } else {
+                isRestricted = false
+                appealStatus = null
             }
             val arr = apiArray("/rest/v1/profiles?select=display_name,username,bio&id=eq.$id&limit=1", active)
             if (arr.length() > 0) {
@@ -458,7 +488,20 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         } catch(e:Exception){ error=e.message }
     }
 
-    if (token == null) {
+    if (token != null && isRestricted) {
+        Column(Modifier.fillMaxSize().background(SkillectBlack).padding(24.dp),verticalArrangement=Arrangement.Center) {
+            Text("Account restricted",fontSize=26.sp,fontWeight=FontWeight.Bold,color=Ink)
+            Text(restrictionStatus+" · "+restrictionReason,color=Color.Gray,modifier=Modifier.padding(top=10.dp))
+            if(appealStatus=="pending" || appealStatus=="under_review") {
+                Text("Your appeal is "+appealStatus+". Your account remains restricted while it is reviewed.",color=Color.Yellow,modifier=Modifier.padding(top=16.dp))
+            } else {
+                OutlinedTextField(appealText,{appealText=it},label={Text("Explain why you believe this decision is incorrect")},modifier=Modifier.fillMaxWidth().padding(top=16.dp),minLines=5)
+                Button(onClick={scope.launch{submitAccountAppeal()}},enabled=appealText.trim().length>=20,modifier=Modifier.fillMaxWidth().padding(top=12.dp)){Text("Submit appeal")}
+            }
+            error?.let { Text(it,color=Color.Red,modifier=Modifier.padding(top=8.dp)) }
+            TextButton(onClick={token=null;userId=null;isRestricted=false;onSignOut()}){Text("Sign out")}
+        }
+    } else if (token == null) {
         Column(Modifier.fillMaxSize().background(SkillectBlack).padding(horizontal=28.dp), verticalArrangement=Arrangement.Center) {
             Text("Skillect", color=Blue, fontSize=34.sp, fontWeight=FontWeight.ExtraBold)
             Text("Grow skills. Share progress. Build together.", color=Ink, modifier=Modifier.padding(top=6.dp,bottom=28.dp))
