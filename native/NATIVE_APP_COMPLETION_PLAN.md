@@ -36,11 +36,11 @@ This plan tracks implementation in the native Kotlin/Jetpack Compose Android app
 - [ ] Verify membership and content RLS policies.
 
 ## Phase 5 — Messaging
-- [ ] Replace Messages placeholder with inbox and conversation screens.
-- [ ] One-to-one conversation creation and participant invitation/acceptance.
-- [ ] Real message send/receive, pagination, unread counts, and realtime updates.
-- [ ] Block/report behavior and participant-only authorization.
-- [ ] Test RLS for users outside a conversation.
+- [x] Replace the Messages placeholder with native conversation lists and message screens on Android and iOS (basic implementation; awaiting CI and backend migration validation).
+- [x] Start a one-to-one conversation from Explore and add both participants (requires the pending conversation RLS migration).
+- [x] Send and load messages through Supabase REST on both platforms (basic implementation; no realtime delivery, pagination, or unread counts yet).
+- [ ] Block/report behavior inside conversations and participant-only authorization verification.
+- [ ] Test RLS for users outside a conversation; the current production policies were found to contain invalid membership predicates, so messaging must remain disabled for public release until migration 0001 is applied and verified in staging.
 
 ## Phase 6 — Notifications
 - [x] Notifications inbox is reachable from Android navigation and iOS tab bar; both clients load the user's real notification rows and support marking read.
@@ -57,4 +57,4 @@ This plan tracks implementation in the native Kotlin/Jetpack Compose Android app
 - [ ] Operational moderation queue, pre-publication media/text screening, admin-only permanent-ban tooling, evidence handling, and appeals are not yet implemented.
 
 ## Current status
-Phase 1 auth UI/API calls, Phase 2 follow/community-membership slices, and native notifications inbox UI are present on the feature branch. Follow/like/comment notification triggers and device-token registry are prepared in a pending migration. Text+image publishing is implemented; Android debug build passed on the previous media commit, and the latest notification/safety commit is awaiting Android/iOS CI. No FCM/APNs delivery, release build, live migration, or end-to-end media test is claimed. Apply migrations only after review and staging tests. All remaining features stay incomplete until tested.
+Phase 1 auth UI/API calls, Phase 2 follow/community-membership slices, native notification inbox, and basic direct-message screens/send/load flows are present on the feature branch. Android debug build passed for the latest messaging commit; iOS simulator CI is queued. Notifications triggers/device-token registry and secure conversation/storage policies are staged migrations, not applied to production. No remote FCM/APNs push, realtime messaging, NSFW scanning, operational moderator workflow, signed release build, or full end-to-end device test is claimed. Existing production conversation RLS predicates were confirmed unsafe; do not enable messaging publicly until migration 0001 is staged, applied, and verified. All remaining features stay incomplete until tested.
