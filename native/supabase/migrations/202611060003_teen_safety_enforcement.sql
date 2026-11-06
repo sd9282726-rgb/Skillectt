@@ -105,6 +105,11 @@ insert into storage.buckets (id,name,public,file_size_limit,allowed_mime_types)
 values ('media-quarantine','media-quarantine',false,12582912,array['image/jpeg','image/png','image/webp','image/heic','image/heif'])
 on conflict (id) do update set public=false,file_size_limit=12582912,allowed_mime_types=array['image/jpeg','image/png','image/webp','image/heic','image/heif'];
 
+update storage.buckets
+set file_size_limit = 12582912,
+    allowed_mime_types = array['image/jpeg','image/png','image/webp','image/heic','image/heif']
+where id = 'post-media';
+
 alter table public.media_assets enable row level security;
 grant select on public.media_assets to authenticated;
 drop policy if exists "Owners and moderators view media review status" on public.media_assets;
