@@ -125,6 +125,14 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                 val r=reports.getJSONObject(i)
                 ModerationRow(r.optString("id"),r.optString("target_type")+" · "+r.optString("reason"),r.optString("details"),r.optString("target_id"),r.optString("target_type"),r.optString("reason"))
             }
+            moderationReports=moderationReports.take(25).map { row ->
+                if(row.targetType=="post" || row.targetType=="comment") {
+                    val table=if(row.targetType=="post") "posts" else "comments"
+                    val content=apiArray("/rest/v1/"+table+"?select=content&id=eq."+row.targetId+"&limit=1",active)
+                    val preview=content.optJSONObject(0)?.optString("content")
+                    if(!preview.isNullOrBlank()) row.copy(detail="Reported content: "+preview) else row
+                } else row
+            }
             val appeals=apiArray("/rest/v1/moderation_appeals?select=id,user_id,enforcement_user_id,explanation,status&status=in.(pending,under_review)&order=created_at.asc&limit=100",active)
             moderationAppeals=(0 until appeals.length()).map { i ->
                 val r=appeals.getJSONObject(i)
