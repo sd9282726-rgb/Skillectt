@@ -55,7 +55,7 @@ private const val KEY = BuildConfig.SUPABASE_KEY
 data class Post(val id: String, val authorId: String, val body: String, val author: String, val handle: String, val image: String?, val likes: Int, val comments: Int)
 data class SimpleItem(val id: String, val title: String, val detail: String)
 data class ChatMessage(val id:String,val senderId:String,val content:String)
-data class ModerationRow(val id:String,val title:String,val detail:String,val targetId:String,val targetType:String,val reason:String,val targetUserId:String?=null)
+data class ModerationRow(val id:String,val title:String,val detail:String,val targetId:String,val targetType:String,val reason:String,val targetUserId:String?=null,val previewUrl:String?=null)
 
 class MainActivity : ComponentActivity() {
 
@@ -184,10 +184,18 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                 ModerationRow(r.optString("id"),r.optString("content_type")+" · "+r.optString("reason"),r.optString("content_snapshot"),r.optString("user_id"),"text_case",r.optString("reason"))
             }
             val mediaCases=apiArray("/rest/v1/media_assets?select=id,owner_id,status,decision_reason,created_at&status=eq.rejected&reviewed_at=is.null&order=created_at.asc&limit=100",active)
-            moderationMediaCases=(0 until mediaCases.length()).map { i ->
+            val loadedMediaCases=(0 until mediaCases.length()).map { i ->
                 val r=mediaCases.getJSONObject(i)
                 ModerationRow(r.optString("id"),"Rejected image",r.optString("decision_reason"),r.optString("owner_id"),"media_case",r.optString("decision_reason"))
             }
+            val withPreviews=mutableListOf<ModerationRow>()
+            for(row in loadedMediaCases) {
+                try {
+                    val preview=api("POST","/functions/v1/moderator-media-preview",active,JSONObject().put("media_asset_id",row.id))
+                    withPreviews.add(row.copy(previewUrl=preview.optString("signed_url").takeIf { it.startsWith("https://") }))
+                } catch(_:Exception) { withPreviews.add(row) }
+            }
+            moderationMediaCases=withPreviews
             error=null
         } catch(e:Exception) { error=e.message }
     }
@@ -794,6 +802,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                                 Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=Color(0xFF171720))) {
                                     Column(Modifier.padding(14.dp)) {
                                         Text(row.title,fontWeight=FontWeight.Bold,color=Ink)
+                                        if(row.previewUrl!=null) AsyncImage(model=row.previewUrl,contentDescription="Rejected image preview",modifier=Modifier.fillMaxWidth().heightIn(max=260.dp))
                                         Text(row.detail,color=Ink)
                                         Text("Account: "+row.targetId,fontSize=11.sp,color=Color.Gray)
                                         Row {
