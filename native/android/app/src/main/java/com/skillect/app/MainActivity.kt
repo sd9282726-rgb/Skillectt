@@ -852,13 +852,13 @@ private suspend fun uploadPostMedia(context:Context, uri:Uri, token:String, user
     "$URL/storage/v1/object/public/post-media/$path"
 }
 
-private suspend fun api(method:String,path:String,token:String?,json:JSONObject?=null):JSONObject = withContext(Dispatchers.IO) {
+private suspend fun api(method:String,path:String,token:String?,json:JSONObject?=null,prefer:String?=null):JSONObject = withContext(Dispatchers.IO) {
     val builder=Request.Builder().url(URL+path).addHeader("apikey",KEY).addHeader("Content-Type","application/json")
     if(token!=null) builder.addHeader("Authorization","Bearer $token")
     val body=json?.toString()?.toRequestBody("application/json".toMediaType())
     when(method) {
         "GET" -> builder.get()
-        "POST" -> builder.post(body ?: "{}".toRequestBody("application/json".toMediaType())).addHeader("Prefer","return=representation")
+        "POST" -> builder.post(body ?: "{}".toRequestBody("application/json".toMediaType())).addHeader("Prefer",prefer ?: "return=representation")
         "PATCH" -> builder.patch(body ?: "{}".toRequestBody("application/json".toMediaType()))
         "DELETE" -> builder.delete()
         else -> builder.get()
