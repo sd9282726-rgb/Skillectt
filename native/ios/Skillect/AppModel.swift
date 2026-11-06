@@ -54,6 +54,8 @@ struct NativeCommunity: Decodable, Identifiable {
     let description: String
     let member_count: Int
 }
+struct NativeConversation: Identifiable { let id: String; var title: String { "Conversation \(id.prefix(8))" } }
+struct NativeChatMessage: Decodable, Identifiable { let id: String; let sender_id: String; let content: String }
 struct NativeNotification: Decodable, Identifiable {
     let id: String
     let type: String
@@ -75,6 +77,9 @@ final class AppModel: ObservableObject {
     @Published var communities: [NativeCommunity] = []
     @Published var joinedCommunityIds: Set<String> = []
     @Published var notifications: [NativeNotification] = []
+    @Published var conversations: [NativeConversation] = []
+    @Published var activeConversationId: String?
+    @Published var chatMessages: [NativeChatMessage] = []
     @Published var currentProfile: DirectoryProfile?
     @Published var isBusy = false
     @Published var isLoading = false
@@ -319,6 +324,51 @@ final class AppModel: ObservableObject {
                 _ = try await request(path: "/rest/v1/follows", method: "POST", body: body, prefer: "return=minimal")
                 followingIds.insert(targetId)
             }
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func loadConversations() async {
+        guard let me = userId else { return }
+        do {
+            let data = try await request(path: "/rest/v1/conversation_participants?select=conversation_id&user_id=eq.\\(me)")
+            let rows = try JSONSerialization.jsonObject(with: data) as? [[String: String]] ?? []
+            let ids = Array(Set(rows.compactMap { $0["conversation_id"] })).sorted()
+            conversations = ids.map { NativeConversation(id: $0) }
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func loadChatMessages(_ conversationId: String) async {
+        do {
+            let data = try await request(path: "/rest/v1/messages?select=id,sender_id,content&conversation_id=eq.\\(conversationId)&order=created_at.asc&limit=200")
+            chatMessages = try JSONDecoder().decode([NativeChatMessage].self, from: data)
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func startConversation(with targetId: String) async {
+        guard let me = userId, me != targetId else { return }
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["created_by": me])
+            let data = try await request(path: "/rest/v1/conversations", method: "POST", body: body, prefer: "return=representation")
+            let rows = try JSONSerialization.jsonObject(with: data) as? [[String: String]] ?? []
+            guard let conversationId = rows.first?["id"] else { throw NSError(domain: "Skillect", code: 1, userInfo: [NSLocalizedDescriptionKey: "Conversation could not be created"]) }
+            for participant in [me, targetId] {
+                let participantBody = try JSONSerialization.data(withJSONObject: ["conversation_id": conversationId, "user_id": participant])
+                _ = try await request(path: "/rest/v1/conversation_participants", method: "POST", body: participantBody, prefer: "return=minimal")
+            }
+            await loadConversations()
+            activeConversationId = conversationId
+            await loadChatMessages(conversationId)
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func sendChatMessage(_ content: String) async {
+        guard let me = userId, let conversationId = activeConversationId else { return }
+        let clean = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return }
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["conversation_id": conversationId, "sender_id": me, "content": clean])
+            _ = try await request(path: "/rest/v1/messages", method: "POST", body: body, prefer: "return=minimal")
+            await loadChatMessages(conversationId)
         } catch { errorMessage = error.localizedDescription }
     }
 
