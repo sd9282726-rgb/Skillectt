@@ -165,4 +165,11 @@ with check (
   and (storage.foldername(name))[1] = (select auth.uid())::text
 );
 
+-- Keep the public post-media bucket image-only for this phase and enforce
+-- the same 12 MB client limit on the server.
+update storage.buckets
+set file_size_limit = 12582912,
+    allowed_mime_types = array['image/jpeg','image/png','image/webp','image/heic','image/heif']
+where id = 'post-media';
+
 commit;
