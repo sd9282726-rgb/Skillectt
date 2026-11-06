@@ -224,6 +224,23 @@ final class AppModel: ObservableObject {
         } catch { errorMessage = error.localizedDescription }
     }
 
+    func reportPost(_ postId: String) async {
+        guard let me = userId else { return }
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["reporter_id": me, "target_type": "post", "target_id": postId, "reason": "inappropriate_content"])
+            _ = try await request(path: "/rest/v1/reports", method: "POST", body: body, prefer: "return=minimal")
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func blockUser(_ targetId: String) async {
+        guard let me = userId, me != targetId else { return }
+        do {
+            let body = try JSONSerialization.data(withJSONObject: ["blocker_id": me, "blocked_id": targetId])
+            _ = try await request(path: "/rest/v1/blocks", method: "POST", body: body, prefer: "return=minimal")
+            directory.removeAll { $0.id == targetId }
+        } catch { errorMessage = error.localizedDescription }
+    }
+
     func toggleFollow(_ targetId: String) async {
         guard let me = userId, me != targetId else { return }
         do {
