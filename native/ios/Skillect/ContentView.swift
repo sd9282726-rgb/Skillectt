@@ -386,6 +386,11 @@ struct CommentsView: View {
                         Text(comment.profiles?.displayName ?? comment.profiles?.username ?? "Member").font(.headline)
                         Text(comment.content)
                     }
+                    .contextMenu {
+                        Button("Report comment", systemImage: "exclamationmark.shield") {
+                            Task { await model.reportComment(comment.id) }
+                        }
+                    }
                 }
                 HStack {
                     TextField("Write a comment", text: $draft).textFieldStyle(.roundedBorder)
