@@ -66,6 +66,7 @@ struct ModerationReport: Decodable, Identifiable {
  let id:String; let reporter_id:String; let target_type:String; let target_id:String
  let reason:String; let details:String?; let status:String; let created_at:String
 }
+struct ModerationMediaCase: Decodable, Identifiable { let id:String; let owner_id:String; let status:String; let decision_reason:String?; let created_at:String }
 struct ModerationTextCase: Decodable, Identifiable { let id:String; let user_id:String; let content_type:String; let content_snapshot:String; let reason:String; let status:String; let created_at:String }
 struct ModerationAppeal: Decodable, Identifiable {
  let id:String; let user_id:String; let enforcement_user_id:String
@@ -185,6 +186,8 @@ final class AppModel: ObservableObject {
             moderationAppeals = try JSONDecoder().decode([ModerationAppeal].self, from: appeals)
             let textCases = try await request(path: "/rest/v1/moderation_text_cases?select=id,user_id,content_type,content_snapshot,reason,status,created_at&status=eq.blocked&order=created_at.asc&limit=100")
             moderationTextCases = try JSONDecoder().decode([ModerationTextCase].self, from: textCases)
+            let mediaCases = try await request(path: "/rest/v1/media_assets?select=id,owner_id,status,decision_reason,created_at&status=eq.rejected&reviewed_at=is.null&order=created_at.asc&limit=100")
+            moderationMediaCases = try JSONDecoder().decode([ModerationMediaCase].self, from: mediaCases)
             errorMessage = nil
         } catch { errorMessage = error.localizedDescription }
     }
@@ -235,6 +238,27 @@ final class AppModel: ObservableObject {
         } catch { errorMessage = error.localizedDescription }
     }
 
+
+
+    func reviewMediaCase(_ item: ModerationMediaCase, ban: Bool) async {
+        guard isModerator, let moderatorId = userId else { return }
+        do {
+            if ban {
+                let existing = try await request(path: "/rest/v1/account_enforcements?select=user_id&user_id=eq.\(item.owner_id)&limit=1")
+                let rows = try JSONSerialization.jsonObject(with: existing) as? [[String: String]] ?? []
+                if rows.isEmpty {
+                    let create = try JSONSerialization.data(withJSONObject: ["user_id": item.owner_id, "status": "permanent", "reason": "Moderator-confirmed prohibited media: \(item.decision_reason ?? "safety violation")", "issued_by": moderatorId])
+                    _ = try await request(path: "/rest/v1/account_enforcements", method: "POST", body: create, prefer: "return=minimal")
+                } else {
+                    let update = try JSONSerialization.data(withJSONObject: ["status": "permanent", "reason": "Moderator-confirmed prohibited media: \(item.decision_reason ?? "safety violation")", "issued_by": moderatorId])
+                    _ = try await request(path: "/rest/v1/account_enforcements?user_id=eq.\(item.owner_id)", method: "PATCH", body: update, prefer: "return=minimal")
+                }
+            }
+            let body = try JSONSerialization.data(withJSONObject: ["reviewed_at": ISO8601DateFormatter().string(from: Date())])
+            _ = try await request(path: "/rest/v1/media_assets?id=eq.\(item.id)", method: "PATCH", body: body, prefer: "return=minimal")
+            await loadModerationQueue()
+        } catch { errorMessage = error.localizedDescription }
+    }
 
     func reviewTextCase(_ item: ModerationTextCase, ban: Bool) async {
         guard isModerator, let moderatorId = userId else { return }
