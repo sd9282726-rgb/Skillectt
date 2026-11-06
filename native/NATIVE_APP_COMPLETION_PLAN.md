@@ -50,7 +50,9 @@ This plan tracks implementation in the native Kotlin/Jetpack Compose Android app
 - [x] Notifications inbox is reachable from Android navigation and iOS tab bar; both clients load the user's real notification rows and support marking read.
 - [ ] Notification event triggers, delivery fan-out, and realtime refresh still need end-to-end verification.
 - [ ] Deep links, pagination, realtime refresh, and notification preferences.
-- [ ] Push registration and delivery (FCM/APNs), permission prompts, and delivery testing. Requires Firebase/APNs project configuration and server-side credentials.
+- [x] Android FCM SDK integration, runtime permission prompt, notification channel, and device-token upsert are implemented. They remain inactive until Firebase app configuration is supplied to the Android build.
+- [ ] Android FCM server delivery, event fan-out, and end-to-end delivery tests require Firebase service-account credentials.
+- [ ] iOS remote push is intentionally deferred; no APNs integration or credentials are included.
 
 ## Phase 7 — Quality and release
 - [ ] Automated unit/API tests and Android/iOS build checks.
