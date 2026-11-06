@@ -18,20 +18,20 @@ This plan tracks implementation in the native Kotlin/Jetpack Compose Android app
 
 ## Phase 2 — Profiles, follows, and discovery
 - [ ] Profile editing: avatar, cover, bio, location, interests, skills, privacy.
-- [ ] Follow/unfollow with follower/following counts and RLS-safe queries.
+- [x] Follow/unfollow actions use the real `follows` table on Android and iOS; persisted-state loading is implemented. Counts and RLS verification remain.
 - [ ] Explore people, skills, tags, and posts with real search and pagination.
 - [ ] Profile deep links and private-account behavior.
 
 ## Phase 3 — Feed and publishing
-- [ ] Create posts with text, image, and video attachments.
+- [ ] Text + image post creation and image selection/upload are implemented on Android and iOS (awaiting CI and end-to-end verification). Video attachments remain.
 - [ ] Feed pagination, refresh, post detail, comments/replies, likes, saves.
-- [ ] Supabase Storage upload with content-type/size validation and progress.
+- [ ] Supabase Storage image upload uses the authenticated user's folder and a 12 MB image limit; server-side bucket limits are in the pending migration. Upload progress and end-to-end verification remain.
 - [ ] Video playback, image/video caching, retry, and offline/error states.
 - [ ] Feed ranking uses real content and explicit empty states.
 
 ## Phase 4 — Communities
 - [ ] Community discovery/search and detail pages.
-- [ ] Join/leave, member lists, roles, and membership state.
+- [x] Join action and persisted membership state are implemented on Android and iOS. Leave, member lists, and roles remain.
 - [ ] Community posts and moderation/report flows.
 - [ ] Verify membership and content RLS policies.
 
@@ -54,4 +54,4 @@ This plan tracks implementation in the native Kotlin/Jetpack Compose Android app
 - [ ] Accessibility, privacy, moderation, crash reporting, performance, and store-readiness review.
 
 ## Current status
-Phase 1 UI/API calls have been added on the native branch. They are not verified until builds pass and real Supabase account-lifecycle tests succeed. All later phases remain incomplete until implemented and tested.
+Phase 1 auth UI/API calls and Phase 2 follow/community-membership slices have been added on the native branch. Phase 3 text+image publishing is implemented but not yet verified. The Android debug build has passed on an earlier commit; the latest media commit is awaiting Android/iOS CI. No release build or end-to-end storage/auth test is claimed. Apply the SQL migration only after review. All remaining features stay incomplete until tested.
