@@ -66,7 +66,7 @@ struct ModerationReport: Decodable, Identifiable {
  let id:String; let reporter_id:String; let target_type:String; let target_id:String
  let reason:String; let details:String?; let status:String; let created_at:String
 }
-struct ModerationMediaCase: Decodable, Identifiable { let id:String; let owner_id:String; let status:String; let decision_reason:String?; let created_at:String }
+struct ModerationMediaCase: Decodable, Identifiable { let id:String; let owner_id:String; let status:String; let decision_reason:String?; let created_at:String; var preview_url:String? }
 struct ModerationTextCase: Decodable, Identifiable { let id:String; let user_id:String; let content_type:String; let content_snapshot:String; let reason:String; let status:String; let created_at:String }
 struct ModerationAppeal: Decodable, Identifiable {
  let id:String; let user_id:String; let enforcement_user_id:String
@@ -188,6 +188,16 @@ final class AppModel: ObservableObject {
             moderationTextCases = try JSONDecoder().decode([ModerationTextCase].self, from: textCases)
             let mediaCases = try await request(path: "/rest/v1/media_assets?select=id,owner_id,status,decision_reason,created_at&status=eq.rejected&reviewed_at=is.null&order=created_at.asc&limit=100")
             moderationMediaCases = try JSONDecoder().decode([ModerationMediaCase].self, from: mediaCases)
+            for index in moderationMediaCases.indices {
+                do {
+                    let previewBody = try JSONSerialization.data(withJSONObject: ["media_asset_id": moderationMediaCases[index].id])
+                    let previewData = try await request(path: "/functions/v1/moderator-media-preview", method: "POST", body: previewBody)
+                    let previewObject = try JSONSerialization.jsonObject(with: previewData) as? [String: Any]
+                    moderationMediaCases[index].preview_url = previewObject?["signed_url"] as? String
+                } catch {
+                    moderationMediaCases[index].preview_url = nil
+                }
+            }
             errorMessage = nil
         } catch { errorMessage = error.localizedDescription }
     }
