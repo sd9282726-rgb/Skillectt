@@ -23,24 +23,50 @@ struct SignInView: View {
     @ObservedObject var model: AppModel
     @State private var email = ""
     @State private var password = ""
+    @State private var displayName = ""
+    @State private var username = ""
+    @State private var mode = "Sign in"
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             Spacer()
             Text("Skillect").font(.system(size: 38, weight: .heavy, design: .rounded)).foregroundStyle(skillectBlue)
-            Text("Grow skills. Share progress. Build together.").foregroundStyle(.secondary).padding(.bottom, 20)
+            Text("Grow skills. Share progress. Build together.").foregroundStyle(.secondary).padding(.bottom, 14)
+            if mode == "Sign up" {
+                TextField("Your name", text: $displayName).textFieldStyle(.roundedBorder)
+                TextField("Username", text: $username).textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder)
+            }
             TextField("Email", text: $email).textInputAutocapitalization(.never).keyboardType(.emailAddress).autocorrectionDisabled().textFieldStyle(.roundedBorder)
-            SecureField("Password", text: $password).textFieldStyle(.roundedBorder)
+            if mode != "Reset password" { SecureField("Password (minimum 8 characters)", text: $password).textFieldStyle(.roundedBorder) }
             if let error = model.errorMessage { Text(error).font(.footnote).foregroundStyle(.red) }
-            Button { Task { await model.signIn(email: email, password: password) } } label: {
+            Button {
+                Task {
+                    switch mode {
+                    case "Sign up": await model.signUp(email: email, password: password, displayName: displayName, username: username)
+                    case "Reset password": await model.sendPasswordReset(email: email)
+                    default: await model.signIn(email: email, password: password)
+                    }
+                }
+            } label: {
                 HStack {
                     if model.isBusy { ProgressView().tint(.white) }
-                    Text(model.isBusy ? "Please wait…" : "Sign in").fontWeight(.semibold)
+                    Text(model.isBusy ? "Please wait…" : mode).fontWeight(.semibold)
                 }.frame(maxWidth: .infinity).padding(.vertical, 14)
-            }.buttonStyle(.borderedProminent).disabled(model.isBusy || email.isEmpty || password.isEmpty)
-            Text("Create your account using the existing Skillect sign-up flow, then confirm your email before signing in.")
-                .font(.caption).foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(model.isBusy || !email.contains("@") || (mode != "Reset password" && password.count < 8) || (mode == "Sign up" && (displayName.isEmpty || username.count < 3)))
+            if mode == "Sign in" {
+                Button("Forgot password?") { mode = "Reset password"; model.errorMessage = nil }
+            }
+            Button(mode == "Sign up" ? "Already have an account? Sign in" : "New to Skillect? Create account") {
+                mode = mode == "Sign up" ? "Sign in" : "Sign up"
+                model.errorMessage = nil
+            }
             Spacer()
-        }.padding(26).background(Color.white.ignoresSafeArea())
+        }
+        .padding(26)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(skillectBlack.ignoresSafeArea())
     }
 }
 
