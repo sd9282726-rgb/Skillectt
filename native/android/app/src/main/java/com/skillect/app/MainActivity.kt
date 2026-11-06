@@ -45,6 +45,7 @@ private const val KEY = BuildConfig.SUPABASE_KEY
 
 data class Post(val id: String, val authorId: String, val body: String, val author: String, val handle: String, val image: String?, val likes: Int, val comments: Int)
 data class SimpleItem(val id: String, val title: String, val detail: String)
+data class ChatMessage(val id:String,val senderId:String,val content:String)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -95,6 +96,10 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     var projectTitle by remember { mutableStateOf("") }
     var projectDescription by remember { mutableStateOf("") }
     var notifications by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
+    var conversations by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
+    var activeConversationId by remember { mutableStateOf<String?>(null) }
+    var chatMessages by remember { mutableStateOf<List<ChatMessage>>(emptyList()) }
+    var messageDraft by remember { mutableStateOf("") }
     var showCommentsFor by remember { mutableStateOf<String?>(null) }
     var comments by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
     var commentText by remember { mutableStateOf("") }
@@ -186,6 +191,55 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             api("PATCH", "/rest/v1/profiles?id=eq.$me", active, JSONObject().put("display_name", displayName).put("bio", bio))
             loadUser()
         } catch (e: Exception) { error = e.message }
+    }
+
+    suspend fun loadConversations() {
+        val active=token ?: return
+        val me=userId ?: return
+        try {
+            val rows=apiArray("/rest/v1/conversation_participants?select=conversation_id&user_id=eq.$me",active)
+            val ids=(0 until rows.length()).map{rows.getJSONObject(it).optString("conversation_id")}.filter{it.isNotBlank()}.distinct()
+            conversations=ids.map{SimpleItem(it,"Conversation ${it.take(8)}","Tap to open")}
+        } catch(e:Exception){ error=e.message }
+    }
+
+    suspend fun loadChatMessages(conversationId:String) {
+        val active=token ?: return
+        try {
+            val arr=apiArray("/rest/v1/messages?select=id,sender_id,content&conversation_id=eq.$conversationId&order=created_at.asc&limit=200",active)
+            chatMessages=(0 until arr.length()).map{val m=arr.getJSONObject(it);ChatMessage(m.optString("id"),m.optString("sender_id"),m.optString("content"))}
+        } catch(e:Exception){ error=e.message }
+    }
+
+    suspend fun startConversation(targetId:String) {
+        val active=token ?: return
+        val me=userId ?: return
+        if(targetId==me) return
+        try {
+            val created=api("POST","/rest/v1/conversations",active,JSONObject().put("created_by",me))
+            val data=created.optJSONArray("data") ?: JSONArray()
+            val conversationId=data.optJSONObject(0)?.optString("id") ?: error("Conversation was not created")
+            api("POST","/rest/v1/conversation_participants",active,JSONObject().put("conversation_id",conversationId).put("user_id",me))
+            api("POST","/rest/v1/conversation_participants",active,JSONObject().put("conversation_id",conversationId).put("user_id",targetId))
+            loadConversations()
+            activeConversationId=conversationId
+            loadChatMessages(conversationId)
+            tab="Messages"
+            error=null
+        } catch(e:Exception){ error=e.message }
+    }
+
+    suspend fun sendChatMessage() {
+        val active=token ?: return
+        val me=userId ?: return
+        val conversationId=activeConversationId ?: return
+        val content=messageDraft.trim()
+        if(content.isEmpty()) return
+        try {
+            api("POST","/rest/v1/messages",active,JSONObject().put("conversation_id",conversationId).put("sender_id",me).put("content",content))
+            messageDraft=""
+            loadChatMessages(conversationId)
+        } catch(e:Exception){ error=e.message }
     }
 
     suspend fun loadNotifications() {
@@ -435,7 +489,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         Text("Find your people",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
                         OutlinedTextField(searchText,{searchText=it},label={Text("Search by name or username")},modifier=Modifier.fillMaxWidth())
                         Button(onClick={scope.launch{searchPeople()}},modifier=Modifier.padding(top=8.dp)){Text("Search")}
-                        LazyColumn { items(results){ item -> Card(Modifier.fillMaxWidth().padding(vertical=5.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);Row { TextButton(onClick={scope.launch{toggleFollow(item.id)}}){Text(if(followingIds.contains(item.id)) "Following" else "Follow")};TextButton(onClick={scope.launch{blockUser(item.id)}}){Text("Block")} }}} } }
+                        LazyColumn { items(results){ item -> Card(Modifier.fillMaxWidth().padding(vertical=5.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);Row { TextButton(onClick={scope.launch{toggleFollow(item.id)}}){Text(if(followingIds.contains(item.id)) "Following" else "Follow")};TextButton(onClick={scope.launch{startConversation(item.id)}}){Text("Message")};TextButton(onClick={scope.launch{blockUser(item.id)}}){Text("Block")} }}} } }
                     }
                     "Create" -> Column(Modifier.fillMaxSize().padding(16.dp)) {
                         Text("Share your progress",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
@@ -464,7 +518,34 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         Text("Posts: ${posts.count{it.authorId==userId}}",modifier=Modifier.padding(top=14.dp))
                         TextButton(onClick={scope.launch{loadFeed()}}){Text("Refresh profile")}
                     }
-                    "Messages" -> Spacer(Modifier.fillMaxSize())
+                    "Messages" -> Column(Modifier.fillMaxSize().padding(16.dp)) {
+                        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
+                            Text(if(activeConversationId==null) "Messages" else "Conversation",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
+                            Row {
+                                if(activeConversationId!=null) TextButton(onClick={activeConversationId=null;chatMessages=emptyList()}){Text("Back")}
+                                TextButton(onClick={scope.launch{if(activeConversationId==null)loadConversations() else loadChatMessages(activeConversationId!!)}}){Text("Refresh")}
+                            }
+                        }
+                        if(activeConversationId==null) {
+                            if(conversations.isEmpty()) Text("No conversations yet. Find someone in Explore and tap Message.",color=Color.Gray)
+                            LazyColumn { items(conversations){ c -> TextButton(onClick={activeConversationId=c.id;scope.launch{loadChatMessages(c.id)}}){Text(c.title,color=Ink)} } }
+                        } else {
+                            LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                                items(chatMessages){ m ->
+                                    val mine=m.senderId==userId
+                                    Row(Modifier.fillMaxWidth(),horizontalArrangement=if(mine)Arrangement.End else Arrangement.Start) {
+                                        Card(colors=CardDefaults.cardColors(containerColor=if(mine)Color(0xFF173D38) else Color(0xFF252530))) {
+                                            Text(m.content,Modifier.padding(12.dp),color=Ink)
+                                        }
+                                    }
+                                }
+                            }
+                            Row(verticalAlignment=Alignment.CenterVertically) {
+                                OutlinedTextField(messageDraft,{messageDraft=it},modifier=Modifier.weight(1f),label={Text("Message")},maxLines=3)
+                                TextButton(onClick={scope.launch{sendChatMessage()}},enabled=messageDraft.isNotBlank()&&!busy){Text("Send")}
+                            }
+                        }
+                    }
                     "Communities" -> LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
                         item { Text("Communities",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink) }
                         items(communities){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);Button(onClick={scope.launch{joinCommunity(item.id)}},enabled=!joinedCommunityIds.contains(item.id),modifier=Modifier.padding(top=6.dp)){Text(if(joinedCommunityIds.contains(item.id)) "Joined" else "Join")}}} }
