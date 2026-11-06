@@ -100,7 +100,35 @@ as $$
 $$;
 
 revoke all on function public.is_conversation_participant(uuid) from public, anon;
+
 grant execute on function public.is_conversation_participant(uuid) to authenticated;
+
+-- A block in either direction prevents new direct messages.
+create or replace function public.can_send_message(_conversation_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $
+  select exists (
+    select 1
+    from public.conversation_participants me
+    join public.conversation_participants them
+      on them.conversation_id = me.conversation_id
+     and them.user_id <> me.user_id
+    where me.conversation_id = _conversation_id
+      and me.user_id = auth.uid()
+      and not exists (
+        select 1 from public.blocks b
+        where (b.blocker_id = auth.uid() and b.blocked_id = them.user_id)
+           or (b.blocker_id = them.user_id and b.blocked_id = auth.uid())
+      )
+  );
+$;
+revoke all on function public.can_send_message(uuid) from public, anon;
+grant execute on function public.can_send_message(uuid) to authenticated;
+
 
 drop policy if exists "Participants visible to members" on public.conversation_participants;
 drop policy if exists "Users can join conversations" on public.conversation_participants;
@@ -157,7 +185,7 @@ on public.messages
 for insert to authenticated
 with check (
   sender_id = auth.uid()
-  and public.is_conversation_participant(conversation_id)
+  and public.can_send_message(conversation_id)
 );
 
 -- Restrict post-media uploads and replacements to a path rooted at the
