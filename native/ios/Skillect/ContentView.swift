@@ -7,7 +7,10 @@ struct RootView: View {
     var body: some View {
         Group {
             if model.accessToken == nil { SignInView(model: model) }
-            else { FeedView(model: model) }
+            else {
+                MainTabs(model: model)
+                    .task { await model.restoreSession() }
+            }
         }
         .tint(skillectBlue)
     }
@@ -17,7 +20,6 @@ struct SignInView: View {
     @ObservedObject var model: AppModel
     @State private var email = ""
     @State private var password = ""
-
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Spacer()
@@ -26,16 +28,12 @@ struct SignInView: View {
             TextField("Email", text: $email).textInputAutocapitalization(.never).keyboardType(.emailAddress).autocorrectionDisabled().textFieldStyle(.roundedBorder)
             SecureField("Password", text: $password).textFieldStyle(.roundedBorder)
             if let error = model.errorMessage { Text(error).font(.footnote).foregroundStyle(.red) }
-            Button {
-                Task { await model.signIn(email: email, password: password) }
-            } label: {
+            Button { Task { await model.signIn(email: email, password: password) } } label: {
                 HStack {
                     if model.isBusy { ProgressView().tint(.white) }
                     Text(model.isBusy ? "Please wait…" : "Sign in").fontWeight(.semibold)
                 }.frame(maxWidth: .infinity).padding(.vertical, 14)
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(model.isBusy || email.isEmpty || password.isEmpty)
+            }.buttonStyle(.borderedProminent).disabled(model.isBusy || email.isEmpty || password.isEmpty)
             Text("Create your account using the existing Skillect sign-up flow, then confirm your email before signing in.")
                 .font(.caption).foregroundStyle(.secondary)
             Spacer()
@@ -43,21 +41,42 @@ struct SignInView: View {
     }
 }
 
+struct MainTabs: View {
+    @ObservedObject var model: AppModel
+    var body: some View {
+        TabView {
+            FeedView(model: model).tabItem { Label("Feed", systemImage: "house") }
+            ExploreView().tabItem { Label("Explore", systemImage: "magnifyingglass") }
+            CreateView(model: model).tabItem { Label("Create", systemImage: "plus.square") }
+            ProjectsView().tabItem { Label("Projects", systemImage: "hammer") }
+            ProfileView(model: model).tabItem { Label("Profile", systemImage: "person.crop.circle") }
+        }
+    }
+}
+
 private struct PostCard: View {
     let post: FeedPost
+    @ObservedObject var model: AppModel
+    @State private var showComments = false
     private var displayName: String {
         if let name = post.profiles?.displayName, !name.isEmpty { return name }
         if let username = post.profiles?.username, !username.isEmpty { return username }
         return "Skillect member"
     }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            Text(displayName).font(.headline)
-            if let handle = post.profiles?.username {
-                Text("@\(handle)").font(.caption).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(displayName).font(.headline)
+                    if let handle = post.profiles?.username { Text("@\(handle)").font(.caption).foregroundStyle(.secondary) }
+                }
+                Spacer()
+                Menu {
+                    Button("Save post", systemImage: "bookmark") { Task { await model.toggleSave(post) } }
+                    Button("Report post", systemImage: "flag") {}
+                } label: { Image(systemName: "ellipsis").foregroundStyle(.secondary).padding(8) }
             }
-            Text(post.content).foregroundStyle(Color.primary)
+            Text(post.content).foregroundStyle(Color.primary).frame(maxWidth: .infinity, alignment: .leading)
             if let imageURL = post.imageURL, let url = URL(string: imageURL) {
                 AsyncImage(url: url) { phase in
                     switch phase {
@@ -65,10 +84,28 @@ private struct PostCard: View {
                     case .failure: Text("Image unavailable").font(.caption).foregroundStyle(.secondary)
                     default: ProgressView()
                     }
-                }
-                .frame(maxWidth: .infinity).frame(height: 190).clipShape(RoundedRectangle(cornerRadius: 14))
+                }.frame(maxWidth: .infinity).frame(height: 190).clipShape(RoundedRectangle(cornerRadius: 14))
             }
-        }.padding(.vertical, 8)
+            HStack {
+                Button { Task { await model.toggleLike(post) } } label: {
+                    Label("\(post.likes_count)", systemImage: model.likedIds.contains(post.id) ? "heart.fill" : "heart")
+                        .foregroundStyle(model.likedIds.contains(post.id) ? .pink : .secondary)
+                }
+                Spacer()
+                Button { showComments = true; Task { await model.loadComments(postId: post.id) } } label: {
+                    Label("\(post.comments_count)", systemImage: "bubble.right").foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button { Task { await model.toggleSave(post) } } label: {
+                    Image(systemName: model.savedIds.contains(post.id) ? "bookmark.fill" : "bookmark")
+                        .foregroundStyle(.secondary)
+                }
+            }.buttonStyle(.plain).font(.subheadline)
+        }
+        .padding(16)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .sheet(isPresented: $showComments) { CommentsView(model: model, postId: post.id) }
     }
 }
 
@@ -77,24 +114,113 @@ struct FeedView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if model.isLoading && model.posts.isEmpty {
-                    ProgressView("Loading your feed")
-                } else if model.posts.isEmpty {
+                if model.isLoading && model.posts.isEmpty { ProgressView("Loading your feed") }
+                else if model.posts.isEmpty {
                     ContentUnavailableView("Your feed is ready", systemImage: "sparkles", description: Text("Share your first idea or follow people whose work inspires you."))
                 } else {
-                    List {
-                        ForEach(model.posts) { post in
-                            PostCard(post: post)
-                        }
-                    }.listStyle(.plain).refreshable { await model.loadFeed() }
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(model.posts) { post in PostCard(post: post, model: model) }
+                        }.padding(14)
+                    }.refreshable { await model.loadFeed() }
                 }
             }
+            .background(Color(red: 0.97, green: 0.98, blue: 1))
             .navigationTitle("Skillect")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Sign out") { model.signOut() }
+                    Button { model.signOut() } label: { Image(systemName: "rectangle.portrait.and.arrow.right") }
                 }
             }
-        }.task { await model.loadFeed() }
+        }
+    }
+}
+
+struct CreateView: View {
+    @ObservedObject var model: AppModel
+    @State private var text = ""
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Share what you're learning, making or discovering.")
+                    .foregroundStyle(.secondary)
+                TextEditor(text: $text)
+                    .frame(minHeight: 220)
+                    .padding(8)
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.gray.opacity(0.2)))
+                Button {
+                    Task { await model.createPost(text); if model.errorMessage == nil { text = "" } }
+                } label: {
+                    HStack { if model.isBusy { ProgressView().tint(.white) }; Text("Publish post").fontWeight(.semibold) }
+                        .frame(maxWidth: .infinity).padding(.vertical, 13)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isBusy)
+                if let error = model.errorMessage { Text(error).font(.caption).foregroundStyle(.red) }
+                Spacer()
+            }.padding().navigationTitle("Create")
+        }
+    }
+}
+
+struct CommentsView: View {
+    @ObservedObject var model: AppModel
+    let postId: String
+    @State private var draft = ""
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            VStack {
+                List(model.comments) { comment in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(comment.profiles?.displayName ?? comment.profiles?.username ?? "Member").font(.headline)
+                        Text(comment.content)
+                    }
+                }
+                HStack {
+                    TextField("Write a comment", text: $draft).textFieldStyle(.roundedBorder)
+                    Button("Send") { Task { await model.addComment(postId: postId, content: draft); draft = "" } }
+                        .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }.padding()
+            }
+            .navigationTitle("Comments")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+            .task { await model.loadComments(postId: postId) }
+        }
+    }
+}
+
+struct ExploreView: View {
+    var body: some View {
+        NavigationStack {
+            ContentUnavailableView("Discover is next", systemImage: "magnifyingglass", description: Text("Search for people, skills and communities will be connected in the next development pass."))
+                .navigationTitle("Explore")
+        }
+    }
+}
+
+struct ProjectsView: View {
+    var body: some View {
+        NavigationStack {
+            ContentUnavailableView("Project showcase is next", systemImage: "hammer", description: Text("Your projects will have their own searchable showcase and progress pages."))
+                .navigationTitle("Projects")
+        }
+    }
+}
+
+struct ProfileView: View {
+    @ObservedObject var model: AppModel
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 12) {
+                Image(systemName: "person.crop.circle.fill").font(.system(size: 64)).foregroundStyle(skillectBlue)
+                Text("Your Skillect profile").font(.title2.bold())
+                Text("Your profile and skills will appear here.").foregroundStyle(.secondary)
+                Text("Posts shared: \(model.posts.filter { $0.authorId == model.userId }.count)")
+                Button("Refresh feed") { Task { await model.loadFeed() } }
+                Spacer()
+            }.padding(.top, 35).navigationTitle("Profile")
+        }
     }
 }
