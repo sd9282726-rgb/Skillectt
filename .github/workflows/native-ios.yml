@@ -1,0 +1,45 @@
+name: Native iOS build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - native/android-ios-foundation
+      - native/skillect-ui-parity
+    paths:
+      - "native/ios/**"
+      - ".github/workflows/native-ios.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ios-simulator:
+    timeout-minutes: 30
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build iOS simulator app
+        run: |
+          xcodebuild -project native/ios/Skillect.xcodeproj \
+            -scheme Skillect \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -derivedDataPath build/ios \
+            CODE_SIGNING_ALLOWED=NO
+      - name: Package simulator app
+        run: |
+          cd build/ios/Build/Products/Debug-iphonesimulator
+          zip -r "$GITHUB_WORKSPACE/Skillect-iOS-Simulator.zip" Skillect.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: skillect-native-ios-simulator
+          path: Skillect-iOS-Simulator.zip
+          retention-days: 14
