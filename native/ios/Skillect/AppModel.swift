@@ -333,9 +333,9 @@ final class AppModel: ObservableObject {
         isBusy = true
         defer { isBusy = false }
         do {
-            let post: [String: Any] = ["author_id": me, "content": cleanText, "tags": [String]()]
+            let post: [String: Any] = ["type": "post", "content": cleanText, "tags": [String]()]
             let body = try JSONSerialization.data(withJSONObject: post)
-            _ = try await request(path: "/rest/v1/posts", method: "POST", body: body, prefer: "return=minimal")
+            _ = try await request(path: "/functions/v1/moderate-text", method: "POST", body: body)
             await loadFeed()
         } catch { errorMessage = error.localizedDescription }
     }
@@ -379,8 +379,8 @@ final class AppModel: ObservableObject {
     func addComment(postId: String, content: String) async {
         guard let me = userId, !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         do {
-            let body = try JSONSerialization.data(withJSONObject: ["post_id": postId, "author_id": me, "content": content.trimmingCharacters(in: .whitespacesAndNewlines)])
-            _ = try await request(path: "/rest/v1/comments", method: "POST", body: body, prefer: "return=minimal")
+            let body = try JSONSerialization.data(withJSONObject: ["type": "comment", "post_id": postId, "content": content.trimmingCharacters(in: .whitespacesAndNewlines)])
+            _ = try await request(path: "/functions/v1/moderate-text", method: "POST", body: body)
             await loadComments(postId: postId)
             await loadFeed()
         } catch { errorMessage = error.localizedDescription }
@@ -416,8 +416,8 @@ final class AppModel: ObservableObject {
     func updateProfile(displayName: String, bio: String) async {
         guard let me = userId else { return }
         do {
-            let body = try JSONSerialization.data(withJSONObject: ["display_name": displayName, "bio": bio])
-            _ = try await request(path: "/rest/v1/profiles?id=eq.\(me)", method: "PATCH", body: body, prefer: "return=minimal")
+            let body = try JSONSerialization.data(withJSONObject: ["type": "profile", "display_name": displayName, "bio": bio])
+            _ = try await request(path: "/functions/v1/moderate-text", method: "POST", body: body)
             await loadDirectory()
         } catch { errorMessage = error.localizedDescription }
     }
@@ -551,8 +551,8 @@ final class AppModel: ObservableObject {
         let clean = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { return }
         do {
-            let body = try JSONSerialization.data(withJSONObject: ["conversation_id": conversationId, "sender_id": me, "content": clean])
-            _ = try await request(path: "/rest/v1/messages", method: "POST", body: body, prefer: "return=minimal")
+            let body = try JSONSerialization.data(withJSONObject: ["type": "message", "conversation_id": conversationId, "content": clean])
+            _ = try await request(path: "/functions/v1/moderate-text", method: "POST", body: body)
             await loadChatMessages(conversationId)
         } catch { errorMessage = error.localizedDescription }
     }
