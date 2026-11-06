@@ -330,7 +330,7 @@ final class AppModel: ObservableObject {
     func loadConversations() async {
         guard let me = userId else { return }
         do {
-            let data = try await request(path: "/rest/v1/conversation_participants?select=conversation_id&user_id=eq.\\(me)")
+            let data = try await request(path: "/rest/v1/conversation_participants?select=conversation_id&user_id=eq.\(me)")
             let rows = try JSONSerialization.jsonObject(with: data) as? [[String: String]] ?? []
             let ids = Array(Set(rows.compactMap { $0["conversation_id"] })).sorted()
             conversations = ids.map { NativeConversation(id: $0) }
@@ -339,7 +339,7 @@ final class AppModel: ObservableObject {
 
     func loadChatMessages(_ conversationId: String) async {
         do {
-            let data = try await request(path: "/rest/v1/messages?select=id,sender_id,content&conversation_id=eq.\\(conversationId)&order=created_at.asc&limit=200")
+            let data = try await request(path: "/rest/v1/messages?select=id,sender_id,content&conversation_id=eq.\(conversationId)&order=created_at.asc&limit=200")
             chatMessages = try JSONDecoder().decode([NativeChatMessage].self, from: data)
         } catch { errorMessage = error.localizedDescription }
     }
