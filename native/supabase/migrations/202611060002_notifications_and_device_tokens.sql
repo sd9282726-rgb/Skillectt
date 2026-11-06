@@ -20,6 +20,15 @@ create table if not exists public.device_tokens (
 );
 
 alter table public.device_tokens enable row level security;
+grant select, insert, update, delete on public.device_tokens to authenticated;
+
+drop policy if exists "Users can update own notifications" on public.notifications;
+create policy "Users can update own notifications"
+on public.notifications
+for update to authenticated
+using ((select auth.uid()) = user_id)
+with check ((select auth.uid()) = user_id);
+
 drop policy if exists "Users manage their own device tokens" on public.device_tokens;
 create policy "Users manage their own device tokens"
 on public.device_tokens
@@ -75,6 +84,10 @@ begin
   return new;
 end;
 $$;
+
+revoke all on function public.notify_new_follow() from public, anon, authenticated;
+revoke all on function public.notify_post_like() from public, anon, authenticated;
+revoke all on function public.notify_post_comment() from public, anon, authenticated;
 
 drop trigger if exists notifications_on_follow on public.follows;
 create trigger notifications_on_follow
