@@ -145,11 +145,10 @@ Deno.serve(async (request: Request) => {
 
   let record: Record<string, any>;
   if (type === "profile") {
-    record = {
-      display_name: String(input.display_name || "").trim().slice(0, 80),
-      username: String(input.username || "").trim().slice(0, 30),
-      bio: String(input.bio || "").trim().slice(0, 300),
-    };
+    record = {};
+    if (Object.prototype.hasOwnProperty.call(input, "display_name")) record.display_name = String(input.display_name || "").trim().slice(0, 80);
+    if (Object.prototype.hasOwnProperty.call(input, "username")) record.username = String(input.username || "").trim().slice(0, 30);
+    if (Object.prototype.hasOwnProperty.call(input, "bio")) record.bio = String(input.bio || "").trim().slice(0, 300);
   } else if (type === "post") {
     const imageUrl = input.image_url ? String(input.image_url) : null;
     if (imageUrl) {
