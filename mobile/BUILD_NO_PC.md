@@ -1,3 +1,5 @@
+> **Security action required:** The previous signing password was stored in this repository's instructions. Treat the old Android signing credentials as exposed. Generate a new upload keystore, update the GitHub Actions secrets, and do not reuse the old passwords before any production release.
+
 # Build Skillect APK without a PC
 
 Use **GitHub Actions** (cloud). Phone browser is enough.
@@ -12,9 +14,9 @@ Add these secrets:
 | Name | Value |
 |------|--------|
 | `KEYSTORE_BASE64` | full contents of `skillect-release.jks.base64.txt` |
-| `KEYSTORE_PASSWORD` | `SkillectRelease2026!` |
+| `KEYSTORE_PASSWORD` | Set a new strong secret in GitHub Actions |
 | `KEY_ALIAS` | `skillect` |
-| `KEY_PASSWORD` | `SkillectRelease2026!` |
+| `KEY_PASSWORD` | Set a new strong secret in GitHub Actions |
 
 ## 2. Run the build
 
