@@ -1,6 +1,11 @@
 package com.skillect.app
 
 import android.os.Bundle
+import android.net.Uri
+import android.content.Context
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import java.util.UUID
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -72,6 +77,10 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     var tab by remember { mutableStateOf("Feed") }
     var refresh by remember { mutableIntStateOf(0) }
     var createText by remember { mutableStateOf("") }
+    var selectedMediaUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedMediaName by remember { mutableStateOf<String?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> selectedMediaUri = uri; selectedMediaName = uri?.lastPathSegment }
     var searchText by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
     var followingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -259,9 +268,13 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         if(createText.isBlank()) return
         busy=true
         try {
+            val mediaUrl = selectedMediaUri?.let { uploadPostMedia(context,it,active,author) }
             val body=JSONObject().put("author_id",author).put("content",createText.trim()).put("tags",JSONArray())
+            if(mediaUrl!=null) body.put("image_url",mediaUrl)
             api("POST","/rest/v1/posts",active,body)
             createText=""
+            selectedMediaUri=null
+            selectedMediaName=null
             tab="Feed"
             loadFeed()
             error=null
@@ -425,7 +438,12 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                     "Create" -> Column(Modifier.fillMaxSize().padding(16.dp)) {
                         Text("Share your progress",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
                         OutlinedTextField(createText,{createText=it},label={Text("What are you learning or building?")},modifier=Modifier.fillMaxWidth().heightIn(min=150.dp),maxLines=8)
-                        Button(onClick={scope.launch{createPost()}},enabled=createText.isNotBlank()&&!busy,modifier=Modifier.padding(top=12.dp)){Text(if(busy)"Publishing…" else "Publish post")}
+                        Row(verticalAlignment=Alignment.CenterVertically) {
+                            TextButton(onClick={mediaPicker.launch("image/*")},enabled=!busy){Text("Choose image")}
+                            selectedMediaName?.let { Text(it.takeLast(28),color=Color.Gray,fontSize=12.sp) }
+                            if(selectedMediaUri!=null) TextButton(onClick={selectedMediaUri=null;selectedMediaName=null}){Text("Remove")}
+                        }
+                        Button(onClick={scope.launch{createPost()}},enabled=(createText.isNotBlank()||selectedMediaUri!=null)&&!busy,modifier=Modifier.padding(top=12.dp)){Text(if(busy)"Publishing…" else "Publish post")}
                     }
                     "Projects" -> Column(Modifier.fillMaxSize().padding(16.dp)) {
                         Text("Projects & builds",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
@@ -475,6 +493,29 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             dismissButton={TextButton(onClick={showCommentsFor=null}){Text("Close")}}
         )
     }
+}
+
+
+private suspend fun uploadPostMedia(context:Context, uri:Uri, token:String, userId:String):String = withContext(Dispatchers.IO) {
+    val mime=context.contentResolver.getType(uri) ?: "image/jpeg"
+    require(mime.startsWith("image/")) { "Choose an image file" }
+    val bytes=context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: error("Could not read selected image")
+    require(bytes.size <= 12 * 1024 * 1024) { "Image must be 12 MB or smaller" }
+    val ext=when(mime.substringAfter("/")) { "jpeg" -> "jpg"; "svg+xml" -> "svg"; else -> mime.substringAfter("/") }
+    val path="$userId/${UUID.randomUUID()}.$ext"
+    val request=Request.Builder()
+        .url("$URL/storage/v1/object/post-media/$path")
+        .addHeader("apikey",KEY)
+        .addHeader("Authorization","Bearer $token")
+        .addHeader("Content-Type",mime)
+        .addHeader("x-upsert","false")
+        .put(bytes.toRequestBody(mime.toMediaType()))
+        .build()
+    client.newCall(request).execute().use { response ->
+        val text=response.body?.string().orEmpty()
+        if(!response.isSuccessful) throw IllegalStateException("Image upload failed (${response.code}): $text")
+    }
+    "$URL/storage/v1/object/public/post-media/$path"
 }
 
 private suspend fun api(method:String,path:String,token:String?,json:JSONObject?=null):JSONObject = withContext(Dispatchers.IO) {
