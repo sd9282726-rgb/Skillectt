@@ -64,7 +64,14 @@ Skillect is an India-first social platform for teenagers to share learning, skil
 - `KEY_ALIAS`
 - `KEY_PASSWORD`
 
-Keep the keystore backed up securely. Losing the upload key can block future updates.
+Generate a new upload keystore on a trusted machine, then base64-encode it for the GitHub secret (do not commit the `.jks` file):
+
+```bash
+keytool -genkeypair -v -keystore skillect-upload.jks -keyalg RSA -keysize 4096 -validity 10000 -alias skillect-upload
+base64 -w 0 skillect-upload.jks
+```
+
+On macOS, use `base64 -i skillect-upload.jks` instead. Store the output as `KEYSTORE_BASE64` and the keystore password, alias, and key password as the other three secrets. Keep the original keystore and passwords backed up securely. Losing the upload key can block future updates.
 
 ### Text/image moderation (Supabase Edge Function secrets)
 
