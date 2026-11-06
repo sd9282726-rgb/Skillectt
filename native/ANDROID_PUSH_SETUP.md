@@ -26,8 +26,14 @@ The registered Android package name is `com.skillect.app`. Debug builds use the 
 
 If Firebase configuration is absent, the app continues to work without remote push and does not crash.
 
-## Server-side delivery still required
+## Server-side delivery
 
-Token registration alone does not send push notifications. A trusted server sender must use a Firebase service account and the FCM HTTP v1 API to deliver events to registered Android tokens. Never embed the service-account JSON/private key in the Android app, iOS app, repository, or client environment.
+A Supabase `send-push` Edge Function is deployed. A database trigger queues an invocation whenever a row is inserted into `notifications`. The function verifies a private database-generated internal secret, validates the notification recipient, loads that user's Android tokens, obtains an OAuth access token using a Firebase service account, and sends a generic notification through FCM HTTP v1. It removes tokens that Firebase reports as unregistered.
 
-The current Supabase database stores device tokens, but automatic notification-event fan-out and Firebase server delivery have not yet been enabled or verified. Keep push marked unavailable until the sender and delivery tests are complete.
+Set the following Supabase Edge Function secret to activate delivery:
+
+- `FIREBASE_SERVICE_ACCOUNT_JSON` — the complete Firebase service-account JSON for the same Firebase project used by the Android client.
+
+Never embed the service-account JSON/private key in the Android app, iOS app, repository, or client build environment. The service-account JSON belongs only in Supabase Edge Function Secrets.
+
+Until the Android Firebase app identifiers and `FIREBASE_SERVICE_ACCOUNT_JSON` are configured, client registration and server delivery remain inactive. iOS push remains intentionally absent. End-to-end delivery must still be tested on a real Android device before launch.
