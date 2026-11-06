@@ -17,6 +17,7 @@ on:
   push:
     branches:
       - native/android-ios-foundation
+      - native/skillect-ui-parity
     paths:
       - "native/android/**"
       - ".github/workflows/native-android.yml"
