@@ -4,6 +4,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val releaseStoreFile = System.getenv("KEYSTORE_PATH")
+val releaseStorePassword = System.getenv("KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("KEY_ALIAS")
+val releaseKeyPassword = System.getenv("KEY_PASSWORD")
+
 android {
     namespace = "com.skillect.app"
     compileSdk = 35
@@ -16,6 +21,14 @@ android {
         buildConfigField("String", "SUPABASE_URL", "\"https://chohswyxsckpwyzlbzav.supabase.co\"")
         buildConfigField("String", "SUPABASE_KEY", "\"sb_publishable__1Bd6TEnLWDtTdT4U4e-oQ_0MeY2E17\"")
     }
+    signingConfigs {
+        create("release") {
+            if (!releaseStoreFile.isNullOrBlank()) storeFile = file(releaseStoreFile)
+            if (!releaseStorePassword.isNullOrBlank()) storePassword = releaseStorePassword
+            if (!releaseKeyAlias.isNullOrBlank()) keyAlias = releaseKeyAlias
+            if (!releaseKeyPassword.isNullOrBlank()) keyPassword = releaseKeyPassword
+        }
+    }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -24,7 +37,10 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildTypes {
         debug { applicationIdSuffix = ".dev"; versionNameSuffix = "-dev" }
-        release { isMinifyEnabled = false }
+        release {
+            isMinifyEnabled = false
+            if (!releaseStoreFile.isNullOrBlank()) signingConfig = signingConfigs.getByName("release")
+        }
     }
 }
 
