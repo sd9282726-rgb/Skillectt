@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 import PhotosUI
 import UniformTypeIdentifiers
+import AVKit
 
 private let skillectBlue = Color(red: 0.0, green: 0.78, blue: 0.47)
 private let skillectBlack = Color(red: 0.02, green: 0.02, blue: 0.035)
@@ -257,6 +258,7 @@ private struct PostCard: View {
     let post: FeedPost
     @ObservedObject var model: AppModel
     @State private var showComments = false
+    @State private var videoPlayer: AVPlayer?
     private var displayName: String {
         if let name = post.profiles?.displayName, !name.isEmpty { return name }
         if let username = post.profiles?.username, !username.isEmpty { return username }
@@ -281,13 +283,21 @@ private struct PostCard: View {
             }
             Text(post.content).foregroundStyle(Color.primary).frame(maxWidth: .infinity, alignment: .leading)
             if let imageURL = post.imageURL, let url = URL(string: imageURL) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image): image.resizable().scaledToFill()
-                    case .failure: Text("Image unavailable").font(.caption).foregroundStyle(.secondary)
-                    default: ProgressView()
-                    }
-                }.frame(maxWidth: .infinity).frame(height: 190).clipShape(RoundedRectangle(cornerRadius: 14))
+                if post.media_type == "video" {
+                    VideoPlayer(player: videoPlayer)
+                        .frame(maxWidth: .infinity).frame(height: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .onAppear { if videoPlayer == nil { videoPlayer = AVPlayer(url: url) } }
+                        .onDisappear { videoPlayer?.pause() }
+                } else {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image): image.resizable().scaledToFill()
+                        case .failure: Text("Image unavailable").font(.caption).foregroundStyle(.secondary)
+                        default: ProgressView()
+                        }
+                    }.frame(maxWidth: .infinity).frame(height: 190).clipShape(RoundedRectangle(cornerRadius: 14))
+                }
             }
             HStack {
                 Button { Task { await model.toggleLike(post) } } label: {
@@ -342,9 +352,10 @@ struct FeedView: View {
 struct CreateView: View {
     @ObservedObject var model: AppModel
     @State private var text = ""
-    @State private var selectedPhoto: PhotosPickerItem?
-    @State private var selectedImageData: Data?
-    @State private var selectedImageMime = "image/jpeg"
+    @State private var selectedVideo: PhotosPickerItem?
+    @State private var selectedVideoData: Data?
+    @State private var selectedVideoMime = "video/mp4"
+    @State private var selectedVideoName = "skillect-video.mp4"
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
@@ -354,20 +365,43 @@ struct CreateView: View {
                     .frame(minHeight: 180)
                     .padding(8)
                     .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.gray.opacity(0.2)))
-                Label("Photo uploads paused until automated safety screening is connected", systemImage: "shield.lefthalf.filled")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                PhotosPicker(selection: $selectedVideo, matching: .videos, photoLibrary: .shared()) {
+                    Label(selectedVideoData == nil ? "Choose video" : "Change video", systemImage: "video")
+                        .frame(maxWidth: .infinity).padding(.vertical, 10)
+                }
+                .buttonStyle(.bordered)
+                .onChange(of: selectedVideo) { _, item in
+                    guard let item else { return }
+                    Task {
+                        if let data = try? await item.loadTransferable(type: Data.self) {
+                            selectedVideoData = data
+                            selectedVideoMime = item.supportedContentTypes.first?.preferredMIMEType ?? "video/mp4"
+                            selectedVideoName = "skillect-video." + (selectedVideoMime == "video/webm" ? "webm" : selectedVideoMime == "video/quicktime" ? "mov" : "mp4")
+                        }
+                    }
+                }
+                Text("MP4, WebM or MOV · up to 50 MB · videos stay private until a moderator approves them")
+                    .font(.caption).foregroundStyle(.secondary)
+                if let info = model.infoMessage { Text(info).font(.caption).foregroundStyle(skillectBlue) }
                 Button {
                     Task {
-                        await model.createPost(text)
-                        if model.errorMessage == nil { text = ""; selectedPhoto = nil; selectedImageData = nil }
+                        if let videoData = selectedVideoData {
+                            await model.submitVideoPost(text, videoData: videoData, mimeType: selectedVideoMime, fileName: selectedVideoName)
+                        } else {
+                            await model.createPost(text)
+                        }
+                        if model.errorMessage == nil {
+                            text = ""
+                            selectedVideo = nil
+                            selectedVideoData = nil
+                        }
                     }
                 } label: {
                     HStack { if model.isBusy { ProgressView().tint(.white) }; Text("Publish post").fontWeight(.semibold) }
                         .frame(maxWidth: .infinity).padding(.vertical, 13)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isBusy)
+                .disabled((text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedVideoData == nil) || model.isBusy)
                 if let error = model.errorMessage { Text(error).font(.caption).foregroundStyle(.red) }
                 Spacer()
             }.padding().navigationTitle("Create")
@@ -545,25 +579,21 @@ struct ModerationView: View {
       }.padding(.vertical,6)
      }
     }
-    Section("Rejected media awaiting review") {
-     if model.moderationMediaCases.isEmpty { Text("No rejected media cases").foregroundStyle(.secondary) }
+    Section("Videos awaiting approval") {
+     if model.moderationMediaCases.isEmpty { Text("No videos awaiting review").foregroundStyle(.secondary) }
      ForEach(model.moderationMediaCases) { item in
       VStack(alignment:.leading,spacing:8) {
-       Text("Rejected image · " + (item.decision_reason ?? "Safety screening")).font(.headline)
+       Text("Pending video · " + (item.mime_type ?? "video")).font(.headline)
        if let preview = item.preview_url, let previewURL = URL(string: preview) {
-        AsyncImage(url: previewURL) { phase in
-         switch phase {
-         case .success(let image): image.resizable().scaledToFit()
-         case .failure: Text("Preview unavailable").foregroundStyle(.secondary)
-         case .empty: ProgressView()
-         @unknown default: EmptyView()
-         }
-        }.frame(maxWidth: .infinity).frame(maxHeight: 240)
+        VideoPlayer(player: AVPlayer(url: previewURL)).frame(maxWidth:.infinity).frame(height:220)
+       } else {
+        Text("Private preview unavailable").font(.caption).foregroundStyle(.secondary)
        }
+       if let caption = item.post_content, !caption.isEmpty { Text(caption) }
        Text("Account: \\(item.owner_id)").font(.caption).foregroundStyle(.secondary)
        HStack {
-        Button("Mark reviewed") { Task { await model.reviewMediaCase(item,ban:false) } }.buttonStyle(.bordered)
-        Button("Permanently ban") { Task { await model.reviewMediaCase(item,ban:true) } }.buttonStyle(.borderedProminent).tint(.red)
+        Button("Approve") { Task { await model.reviewVideoCase(item,approve:true) } }.buttonStyle(.borderedProminent)
+        Button("Reject") { Task { await model.reviewVideoCase(item,approve:false) } }.buttonStyle(.bordered).tint(.red)
        }
       }.padding(.vertical,6)
      }
