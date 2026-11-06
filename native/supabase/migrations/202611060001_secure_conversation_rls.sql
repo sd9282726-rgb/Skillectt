@@ -29,6 +29,8 @@ begin
     requested_display_name := coalesce(nullif(split_part(coalesce(new.email, ''), '@', 1), ''), 'New member');
   end if;
 
+  -- A requested username may already be taken. Do not let that collision
+  -- abort Auth signup; retry once with a stable per-user suffix.
   insert into public.profiles (id, email, display_name, username, avatar_url)
   values (
     new.id,
@@ -36,7 +38,20 @@ begin
     requested_display_name,
     safe_username,
     coalesce(new.raw_user_meta_data ->> 'avatar_url', '')
-  );
+  )
+  on conflict (username) do nothing;
+
+  if not found then
+    safe_username := left(safe_username, 40) || '_' || left(replace(new.id::text, '-', ''), 8);
+    insert into public.profiles (id, email, display_name, username, avatar_url)
+    values (
+      new.id,
+      new.email,
+      requested_display_name,
+      safe_username,
+      coalesce(new.raw_user_meta_data ->> 'avatar_url', '')
+    );
+  end if;
 
   return new;
 end;
