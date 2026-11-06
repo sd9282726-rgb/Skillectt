@@ -49,7 +49,9 @@ struct MainTabs: View {
             ExploreView(model: model).tabItem { Label("Explore", systemImage: "magnifyingglass") }
             CreateView(model: model).tabItem { Label("Create", systemImage: "plus.square") }
             ProjectsView(model: model).tabItem { Label("Projects", systemImage: "hammer") }
-            CommunitiesView(model: model).tabItem { Label("Groups", systemImage: "person.3") }\n            NotificationsView(model: model).tabItem { Label("Alerts", systemImage: "bell") }\n            ProfileView(model: model).tabItem { Label("Profile", systemImage: "person.crop.circle") }
+            CommunitiesView(model: model).tabItem { Label("Groups", systemImage: "person.3") }
+            NotificationsView(model: model).tabItem { Label("Alerts", systemImage: "bell") }
+            ProfileView(model: model).tabItem { Label("Profile", systemImage: "person.crop.circle") }
         }
     }
 }
