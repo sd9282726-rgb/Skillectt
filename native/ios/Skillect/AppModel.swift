@@ -486,7 +486,7 @@ final class AppModel: ObservableObject {
                 let readRows = try JSONSerialization.jsonObject(with: readData) as? [[String: String]] ?? []
                 let lastRead = readRows.first?["last_read_at"]
                 var messagesPath = "/rest/v1/messages?select=id&conversation_id=eq.\(conversationId)&sender_id=neq.\(me)&limit=1000"
-                if let lastRead { messagesPath += "&created_at=gt." + lastRead }
+                if let lastRead { messagesPath += "&created_at=gt." + lastRead.replacingOccurrences(of: "+", with: "%2B") }
                 let unreadData = try await request(path: messagesPath)
                 let unreadRows = try JSONSerialization.jsonObject(with: unreadData) as? [[String: Any]] ?? []
                 loaded.append(NativeConversation(id: conversationId, unreadCount: unreadRows.count))
