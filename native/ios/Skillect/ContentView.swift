@@ -103,7 +103,7 @@ struct MainTabs: View {
                 ExploreView(model: model).tabItem { Label("Explore", systemImage: "safari") }
                 CommunitiesView(model: model).tabItem { Label("Communities", systemImage: "person.3") }
                 CreateView(model: model).tabItem { Label("Create", systemImage: "plus.square") }
-                MessagesPlaceholder().tabItem { Label("Messages", systemImage: "bubble.left") }
+                MessagesView(model: model).tabItem { Label("Messages", systemImage: "bubble.left") }
                 NotificationsView(model: model).tabItem { Label("Alerts", systemImage: "bell") }
                 ProfileView(model: model).tabItem { Label("Profile", systemImage: "person") }
             }
@@ -162,8 +162,65 @@ private struct NotificationsView: View {
     }
 }
 
-private struct MessagesPlaceholder: View {
-    var body: some View { skillectBlack.ignoresSafeArea() }
+private struct MessagesView: View {
+    @ObservedObject var model: AppModel
+    @State private var draft = ""
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let conversationId = model.activeConversationId {
+                    VStack(spacing: 0) {
+                        HStack {
+                            Button("Back") { model.activeConversationId = nil; model.chatMessages = []; Task { await model.loadConversations() } }
+                            Spacer()
+                            Text("Conversation").font(.headline)
+                            Spacer()
+                            Button("Refresh") { Task { await model.loadChatMessages(conversationId) } }
+                        }.padding()
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 10) {
+                                ForEach(model.chatMessages) { message in
+                                    HStack {
+                                        if message.sender_id == model.userId { Spacer(minLength: 35) }
+                                        Text(message.content).padding(12).background(message.sender_id == model.userId ? skillectBlue.opacity(0.25) : Color.white.opacity(0.08)).clipShape(RoundedRectangle(cornerRadius: 14))
+                                        if message.sender_id != model.userId { Spacer(minLength: 35) }
+                                    }
+                                }
+                            }.padding()
+                        }
+                        HStack {
+                            TextField("Write a message", text: $draft, axis: .vertical).textFieldStyle(.roundedBorder)
+                            Button("Send") {
+                                let outgoing = draft
+                                draft = ""
+                                Task { await model.sendChatMessage(outgoing) }
+                            }.disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }.padding()
+                    }
+                } else {
+                    List(model.conversations) { conversation in
+                        Button(conversation.title) {
+                            model.activeConversationId = conversation.id
+                            Task { await model.loadChatMessages(conversation.id) }
+                        }
+                    }.overlay {
+                        if model.conversations.isEmpty {
+                            ContentUnavailableView("No messages yet", systemImage: "bubble.left", description: Text("Find someone in Explore and tap Message to start a conversation."))
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Messages")
+            .toolbar {
+                if model.activeConversationId == nil {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Refresh") { Task { await model.loadConversations() } }
+                    }
+                }
+            }
+            .task { await model.loadConversations() }
+        }
+    }
 }
 
 private struct PostCard: View {
@@ -352,6 +409,7 @@ struct ExploreView: View {
                             Button(model.followingIds.contains(person.id) ? "Following" : "Follow") {
                                 Task { await model.toggleFollow(person.id) }
                             }.buttonStyle(.bordered)
+                            Button("Message") { Task { await model.startConversation(with: person.id) } }.buttonStyle(.bordered)
                             Button("Block") { Task { await model.blockUser(person.id) } }.buttonStyle(.bordered)
                         }
                     }
