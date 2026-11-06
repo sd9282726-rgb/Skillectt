@@ -69,9 +69,10 @@ Deno.serve(async (request: Request) => {
   let input: Record<string, any>;
   try { input = await request.json(); } catch { return json(400, { error: "Invalid JSON" }); }
   const type = String(input.type || "");
-  const content = String(input.content || "").trim();
-  if (!["post", "comment", "message"].includes(type)) return json(400, { error: "Unsupported content type" });
-  const maxLength = type === "post" ? 5000 : type === "comment" ? 1500 : 2000;
+  const profileFields = type === "profile" ? [String(input.display_name || ""), String(input.username || ""), String(input.bio || "")] : [];
+  const content = (type === "profile" ? profileFields.join("\n") : String(input.content || "")).trim();
+  if (!["post", "comment", "message", "profile"].includes(type)) return json(400, { error: "Unsupported content type" });
+  const maxLength = type === "post" ? 5000 : type === "comment" ? 1500 : type === "profile" ? 500 : 2000;
   if (!content || content.length > maxLength) return json(400, { error: "Text is empty or exceeds the allowed length" });
 
   try {
@@ -143,7 +144,13 @@ Deno.serve(async (request: Request) => {
   }
 
   let record: Record<string, any>;
-  if (type === "post") {
+  if (type === "profile") {
+    record = {
+      display_name: String(input.display_name || "").trim().slice(0, 80),
+      username: String(input.username || "").trim().slice(0, 30),
+      bio: String(input.bio || "").trim().slice(0, 300),
+    };
+  } else if (type === "post") {
     const imageUrl = input.image_url ? String(input.image_url) : null;
     if (imageUrl) {
       try {
@@ -166,6 +173,10 @@ Deno.serve(async (request: Request) => {
   }
 
   try {
+    if (type === "profile") {
+      await rest(base, service, "profiles?id=eq." + encodeURIComponent(userId), "PATCH", record);
+      return json(200, { status: "approved" });
+    }
     const table = type === "post" ? "posts" : type === "comment" ? "comments" : "messages";
     const created = await rest(base, service, table + "?select=id", "POST", record);
     return json(200, { status: "approved", id: Array.isArray(created) ? created[0]?.id : null });
