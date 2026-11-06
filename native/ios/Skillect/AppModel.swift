@@ -85,12 +85,32 @@ final class AppModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
 
+    private func validateAccountStatus() async -> Bool {
+        guard let me = userId, accessToken != nil else { return false }
+        do {
+            let data = try await request(path: "/rest/v1/account_enforcements?select=status,reason&user_id=eq.\\(me)&limit=1")
+            let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] ?? []
+            guard let enforcement = rows.first else { return true }
+            let status = enforcement["status"] as? String ?? "suspended"
+            errorMessage = status == "permanent"
+                ? "This account has been permanently banned from Skillect."
+                : "This account is temporarily restricted."
+            signOut()
+            return false
+        } catch {
+            errorMessage = "We could not verify this account's safety status. Please try again."
+            signOut()
+            return false
+        }
+    }
+
     func restoreSession() async {
         guard accessToken != nil else { return }
         do {
             let data = try await request(path: "/auth/v1/user")
             let user = try JSONDecoder().decode(AuthUser.self, from: data)
             userId = user.id
+            guard await validateAccountStatus() else { return }
             await loadFeed()
         } catch { errorMessage = error.localizedDescription }
     }
@@ -106,6 +126,7 @@ final class AppModel: ObservableObject {
             accessToken = auth.access_token
             userId = auth.user.id
             Keychain.save(auth.access_token)
+            guard await validateAccountStatus() else { return }
             await loadFeed()
             await loadDirectory()
         } catch { errorMessage = error.localizedDescription }
@@ -123,6 +144,7 @@ final class AppModel: ObservableObject {
                 accessToken = auth.access_token
                 userId = auth.user.id
                 Keychain.save(auth.access_token)
+                guard await validateAccountStatus() else { return }
                 await loadFeed()
                 await loadDirectory()
             } else {
@@ -165,31 +187,14 @@ final class AppModel: ObservableObject {
         guard let me = userId else { return }
         let cleanText = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanText.isEmpty || imageData != nil else { return }
+        guard imageData == nil else {
+            errorMessage = "Photo publishing is paused until automated safety screening is connected."
+            return
+        }
         isBusy = true
         defer { isBusy = false }
         do {
-            var imageURL: String?
-            if let imageData {
-                guard imageData.count <= 12 * 1024 * 1024 else { throw NSError(domain: "Skillect", code: 413, userInfo: [NSLocalizedDescriptionKey: "Image must be 12 MB or smaller"]) }
-                let mime = imageMime ?? "image/jpeg"
-                guard mime.hasPrefix("image/") else { throw NSError(domain: "Skillect", code: 415, userInfo: [NSLocalizedDescriptionKey: "Choose an image file"]) }
-                let ext = mime == "image/jpeg" ? "jpg" : (mime as NSString).pathExtension.isEmpty ? "img" : (mime as NSString).pathExtension
-                let objectPath = "\(me)/\(UUID().uuidString.lowercased()).\(ext)"
-                var upload = URLRequest(url: URL(string: "storage/v1/object/post-media/\(objectPath)", relativeTo: Backend.baseURL)!.absoluteURL)
-                upload.httpMethod = "POST"
-                upload.setValue(Backend.publishableKey, forHTTPHeaderField: "apikey")
-                if let accessToken { upload.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization") }
-                upload.setValue(mime, forHTTPHeaderField: "Content-Type")
-                upload.setValue("false", forHTTPHeaderField: "x-upsert")
-                upload.httpBody = imageData
-                let (uploadData, uploadResponse) = try await URLSession.shared.data(for: upload)
-                guard let http = uploadResponse as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                    throw NSError(domain: "Skillect", code: (uploadResponse as? HTTPURLResponse)?.statusCode ?? -1, userInfo: [NSLocalizedDescriptionKey: String(data: uploadData, encoding: .utf8) ?? "Image upload failed"])
-                }
-                imageURL = URL(string: "storage/v1/object/public/post-media/\(objectPath)", relativeTo: Backend.baseURL)!.absoluteURL.absoluteString
-            }
-            var post: [String: Any] = ["author_id": me, "content": cleanText, "tags": [String]()]
-            if let imageURL { post["image_url"] = imageURL }
+            let post: [String: Any] = ["author_id": me, "content": cleanText, "tags": [String]()]
             let body = try JSONSerialization.data(withJSONObject: post)
             _ = try await request(path: "/rest/v1/posts", method: "POST", body: body, prefer: "return=minimal")
             await loadFeed()
