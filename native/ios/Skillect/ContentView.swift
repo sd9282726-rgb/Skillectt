@@ -106,6 +106,7 @@ struct MainTabs: View {
                 MessagesView(model: model).tabItem { Label("Messages", systemImage: "bubble.left") }
                 NotificationsView(model: model).tabItem { Label("Alerts", systemImage: "bell") }
                 ProfileView(model: model).tabItem { Label("Profile", systemImage: "person") }
+                if model.isModerator { ModerationView(model: model).tabItem { Label("Moderation", systemImage: "shield.lefthalf.filled") } }
             }
             .toolbarBackground(skillectBlack, for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
@@ -482,6 +483,49 @@ struct NotificationsView: View {
             }.navigationTitle("Notifications").task { await model.loadDirectory() }
         }
     }
+}
+
+
+struct ModerationView: View {
+ @ObservedObject var model: AppModel
+ var body: some View {
+  NavigationStack {
+   List {
+    Section("Reports awaiting review") {
+     if model.moderationReports.isEmpty { Text("No pending reports").foregroundStyle(.secondary) }
+     ForEach(model.moderationReports) { report in
+      VStack(alignment:.leading,spacing:8) {
+       Text("\(report.target_type.capitalized) · \(report.reason.replacingOccurrences(of: "_", with: " "))").font(.headline)
+       Text("Target: \(report.target_id)").font(.caption).foregroundStyle(.secondary)
+       if let details=report.details,!details.isEmpty { Text(details).font(.subheadline) }
+       HStack {
+        Button("Resolve") { Task { await model.resolveReport(report) } }.buttonStyle(.bordered)
+        Button("Permanently ban") { Task { await model.permanentlyBanReportedUser(report) } }.buttonStyle(.borderedProminent).tint(.red)
+       }
+      }.padding(.vertical,6)
+     }
+    }
+    Section("Appeals") {
+     if model.moderationAppeals.isEmpty { Text("No pending appeals").foregroundStyle(.secondary) }
+     ForEach(model.moderationAppeals) { appeal in
+      VStack(alignment:.leading,spacing:8) {
+       Text("Account appeal · \(appeal.status.capitalized)").font(.headline)
+       Text(appeal.explanation)
+       Text("Account: \(appeal.user_id)").font(.caption).foregroundStyle(.secondary)
+       HStack {
+        Button("Accept and lift ban") { Task { await model.reviewAppeal(appeal,accept:true) } }.buttonStyle(.borderedProminent)
+        Button("Reject") { Task { await model.reviewAppeal(appeal,accept:false) } }.buttonStyle(.bordered).tint(.red)
+       }
+      }.padding(.vertical,6)
+     }
+    }
+   }
+   .scrollContentBackground(.hidden).background(skillectBlack)
+   .navigationTitle("Safety moderation")
+   .toolbar { ToolbarItem(placement:.topBarTrailing) { Button("Refresh") { Task { await model.loadModerationQueue() } } } }
+   .task { await model.loadModerationQueue() }
+  }
+ }
 }
 
 struct ProfileView: View {
