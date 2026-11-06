@@ -118,7 +118,8 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     var isModerator by remember { mutableStateOf(false) }
     var moderationReports by remember { mutableStateOf<List<ModerationRow>>(emptyList()) }
     var moderationAppeals by remember { mutableStateOf<List<ModerationRow>>(emptyList()) }
-    var moderationTextCases by remember { mutableStateOf<List<ModerationRow>>(emptyList()) }\n    var moderationMediaCases by remember { mutableStateOf<List<ModerationRow>>(emptyList()) }
+    var moderationTextCases by remember { mutableStateOf<List<ModerationRow>>(emptyList()) }
+    var moderationMediaCases by remember { mutableStateOf<List<ModerationRow>>(emptyList()) }
     var posts by remember { mutableStateOf<List<Post>>(emptyList()) }
     var likedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var savedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
