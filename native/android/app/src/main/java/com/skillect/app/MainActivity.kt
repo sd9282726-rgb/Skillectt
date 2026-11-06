@@ -971,7 +971,7 @@ private suspend fun api(method:String,path:String,token:String?,json:JSONObject?
     }
     client.newCall(builder.build()).execute().use { response ->
         val text=response.body?.string().orEmpty()
-        if(!response.isSuccessful) throw IllegalStateException(try{JSONObject(text).optString("message",JSONObject(text).optString("msg","Request failed (${response.code})"))}catch(_:Exception){"Request failed (${response.code})"})
+        if(!response.isSuccessful) throw IllegalStateException(try{JSONObject(text).optString("error",JSONObject(text).optString("message",JSONObject(text).optString("msg","Request failed (${response.code})")) )}catch(_:Exception){"Request failed (${response.code})"})
         if(text.isBlank()) JSONObject() else try{JSONObject(text)}catch(_:Exception){JSONObject().put("data",JSONArray(text))}
     }
 }
