@@ -543,6 +543,19 @@ struct ModerationView: View {
       }.padding(.vertical,6)
      }
     }
+    Section("Rejected media awaiting review") {
+     if model.moderationMediaCases.isEmpty { Text("No rejected media cases").foregroundStyle(.secondary) }
+     ForEach(model.moderationMediaCases) { item in
+      VStack(alignment:.leading,spacing:8) {
+       Text("Rejected image · " + (item.decision_reason ?? "Safety screening")).font(.headline)
+       Text("Account: \\(item.owner_id)").font(.caption).foregroundStyle(.secondary)
+       HStack {
+        Button("Mark reviewed") { Task { await model.reviewMediaCase(item,ban:false) } }.buttonStyle(.bordered)
+        Button("Permanently ban") { Task { await model.reviewMediaCase(item,ban:true) } }.buttonStyle(.borderedProminent).tint(.red)
+       }
+      }.padding(.vertical,6)
+     }
+    }
     Section("Flagged text awaiting review") {
      if model.moderationTextCases.isEmpty { Text("No blocked text cases").foregroundStyle(.secondary) }
      ForEach(model.moderationTextCases) { item in
