@@ -61,6 +61,9 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     var userId by remember { mutableStateOf<String?>(null) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var displayNameInput by remember { mutableStateOf("") }
+    var usernameInput by remember { mutableStateOf("") }
+    var authMode by remember { mutableStateOf("Sign in") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var posts by remember { mutableStateOf<List<Post>>(emptyList()) }
@@ -287,24 +290,49 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     }
 
     if (token == null) {
-        Column(Modifier.fillMaxSize().background(Color.White).padding(horizontal=28.dp), verticalArrangement=Arrangement.Center) {
+        Column(Modifier.fillMaxSize().background(SkillectBlack).padding(horizontal=28.dp), verticalArrangement=Arrangement.Center) {
             Text("Skillect", color=Blue, fontSize=34.sp, fontWeight=FontWeight.ExtraBold)
             Text("Grow skills. Share progress. Build together.", color=Ink, modifier=Modifier.padding(top=6.dp,bottom=28.dp))
+            if (authMode == "Sign up") {
+                OutlinedTextField(displayNameInput,{displayNameInput=it},label={Text("Your name")},modifier=Modifier.fillMaxWidth(),singleLine=true)
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(usernameInput,{usernameInput=it.lowercase().filter { ch -> ch.isLetterOrDigit() || ch == '_' }},label={Text("Username")},modifier=Modifier.fillMaxWidth(),singleLine=true)
+                Spacer(Modifier.height(10.dp))
+            }
             OutlinedTextField(email,{email=it},label={Text("Email")},modifier=Modifier.fillMaxWidth(),singleLine=true)
             Spacer(Modifier.height(12.dp))
-            OutlinedTextField(password,{password=it},label={Text("Password")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth(),singleLine=true)
+            if (authMode != "Reset password") {
+                OutlinedTextField(password,{password=it},label={Text("Password")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth(),singleLine=true)
+            }
             error?.let { Text(it,color=Color.Red,modifier=Modifier.padding(top=10.dp)) }
             Button(onClick={
                 scope.launch {
                     busy=true; error=null
                     try {
-                        val auth=api("POST","/auth/v1/token?grant_type=password",null,JSONObject().put("email",email.trim()).put("password",password))
-                        val newToken=auth.getString("access_token"); token=newToken; onToken(newToken)
-                    } catch(e:Exception){ error=e.message ?: "Sign in failed" }
+                        when(authMode) {
+                            "Sign in" -> {
+                                val auth=api("POST","/auth/v1/token?grant_type=password",null,JSONObject().put("email",email.trim()).put("password",password))
+                                val newToken=auth.getString("access_token"); token=newToken; onToken(newToken)
+                            }
+                            "Sign up" -> {
+                                require(displayNameInput.isNotBlank() && usernameInput.length >= 3) { "Enter your name and a username of at least 3 characters." }
+                                val metadata=JSONObject().put("display_name",displayNameInput.trim()).put("username",usernameInput.trim())
+                                val auth=api("POST","/auth/v1/signup",null,JSONObject().put("email",email.trim()).put("password",password).put("data",metadata))
+                                val newToken=auth.optString("access_token")
+                                if(newToken.isNotBlank()) { token=newToken; onToken(newToken) }
+                                else error="Account created. Check your email if confirmation is enabled, then sign in."
+                            }
+                            else -> {
+                                api("POST","/auth/v1/recover",null,JSONObject().put("email",email.trim()))
+                                error="If an account exists for this email, password reset instructions have been sent."
+                            }
+                        }
+                    } catch(e:Exception){ error=e.message ?: "$authMode failed" }
                     busy=false
                 }
-            },enabled=!busy && email.isNotBlank() && password.isNotBlank(),modifier=Modifier.fillMaxWidth().padding(top=20.dp),shape=RoundedCornerShape(14.dp)) { Text(if(busy) "Please wait…" else "Sign in") }
-            Text("Create your account using the existing Skillect sign-up flow and confirm your email before signing in.",color=Color.Gray,fontSize=12.sp,modifier=Modifier.padding(top=14.dp))
+            },enabled=!busy && email.contains("@") && (authMode=="Reset password" || password.length>=8),modifier=Modifier.fillMaxWidth().padding(top=20.dp),shape=RoundedCornerShape(14.dp)) { Text(if(busy) "Please wait…" else authMode) }
+            if (authMode == "Sign in") TextButton(onClick={authMode="Reset password";error=null}) { Text("Forgot password?") }
+            TextButton(onClick={authMode=if(authMode=="Sign up") "Sign in" else "Sign up";error=null}) { Text(if(authMode=="Sign up") "Already have an account? Sign in" else "New to Skillect? Create account") }
         }
     } else {
         Scaffold(
