@@ -25,6 +25,7 @@ struct FeedPost: Decodable, Identifiable {
     let author_id: String
     let content: String
     let image_url: String?
+    let media_type: String?
     let likes_count: Int
     let comments_count: Int
     let profiles: PostProfile?
@@ -66,7 +67,11 @@ struct ModerationReport: Decodable, Identifiable {
  let id:String; let reporter_id:String; let target_type:String; let target_id:String
  let reason:String; let details:String?; let status:String; let created_at:String
 }
-struct ModerationMediaCase: Decodable, Identifiable { let id:String; let owner_id:String; let status:String; let decision_reason:String?; let created_at:String; var preview_url:String? }
+struct ModerationMediaCase: Decodable, Identifiable {
+    let id:String; let owner_id:String; let status:String; let decision_reason:String?
+    let created_at:String; let media_type:String?; let mime_type:String?; let post_content:String?
+    var preview_url:String?
+}
 struct ModerationTextCase: Decodable, Identifiable { let id:String; let user_id:String; let content_type:String; let content_snapshot:String; let reason:String; let status:String; let created_at:String }
 struct ModerationAppeal: Decodable, Identifiable {
  let id:String; let user_id:String; let enforcement_user_id:String
@@ -101,7 +106,10 @@ final class AppModel: ObservableObject {
     @Published var isBusy = false
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var infoMessage: String?
     @Published var isAccountRestricted = false
+    private var realtimeTask: Task<Void, Never>?
+    private var realtimeSocket: URLSessionWebSocketTask?
     @Published var restrictionStatus = ""
     @Published var restrictionReason = ""
     @Published var myAppealStatus: String?
@@ -310,6 +318,7 @@ final class AppModel: ObservableObject {
             userId = user.id
             guard await validateAccountStatus() else { return }
             await loadFeed()
+            startRealtime()
         } catch { errorMessage = error.localizedDescription }
     }
 
@@ -327,6 +336,7 @@ final class AppModel: ObservableObject {
             guard await validateAccountStatus() else { return }
             await loadFeed()
             await loadDirectory()
+            startRealtime()
         } catch { errorMessage = error.localizedDescription }
     }
 
@@ -345,6 +355,7 @@ final class AppModel: ObservableObject {
                 guard await validateAccountStatus() else { return }
                 await loadFeed()
                 await loadDirectory()
+                startRealtime()
             } else {
                 errorMessage = "Account created. Check your email if confirmation is enabled, then sign in."
             }
@@ -378,6 +389,28 @@ final class AppModel: ObservableObject {
                 savedIds = Set(saveRows.compactMap { $0["post_id"] })
             }
             errorMessage = nil
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    func submitVideoPost(_ content: String, videoData: Data, mimeType: String, fileName: String) async {
+        guard accessToken != nil else { return }
+        guard ["video/mp4", "video/webm", "video/quicktime"].contains(mimeType) else { errorMessage = "Choose an MP4, WebM or MOV video"; return }
+        guard !videoData.isEmpty, videoData.count <= 50 * 1024 * 1024 else { errorMessage = "Video must be 50 MB or smaller"; return }
+        isBusy = true
+        errorMessage = nil
+        infoMessage = nil
+        defer { isBusy = false }
+        let boundary = "SkillectBoundary-\\(UUID().uuidString)"
+        var body = Data()
+        func append(_ value: String) { body.append(Data(value.utf8)) }
+        let safeName = fileName.replacingOccurrences(of: "\"", with: "")
+        append("--\\(boundary)\\r\\nContent-Disposition: form-data; name=\"content\"\\r\\n\\r\\n\\(content.trimmingCharacters(in: .whitespacesAndNewlines))\\r\\n")
+        append("--\\(boundary)\\r\\nContent-Disposition: form-data; name=\"file\"; filename=\"\\(safeName)\"\\r\\nContent-Type: \\(mimeType)\\r\\n\\r\\n")
+        body.append(videoData)
+        append("\\r\\n--\\(boundary)--\\r\\n")
+        do {
+            _ = try await request(path: "/functions/v1/submit-video-post", method: "POST", body: body, contentType: "multipart/form-data; boundary=\\(boundary)")
+            infoMessage = "Video submitted for moderator review. It will appear in the feed after approval."
         } catch { errorMessage = error.localizedDescription }
     }
 
@@ -625,6 +658,7 @@ final class AppModel: ObservableObject {
     }
 
     func signOut() {
+        stopRealtime()
         accessToken = nil
         userId = nil
         isAccountRestricted = false
@@ -635,11 +669,82 @@ final class AppModel: ObservableObject {
         Keychain.delete()
     }
 
-    private func request(path: String, method: String = "GET", body: Data? = nil, authenticated: Bool = true, prefer: String? = nil) async throws -> Data {
+    private func startRealtime() {
+        guard let token = accessToken else { return }
+        realtimeTask?.cancel()
+        realtimeTask = Task { [weak self] in await self?.runRealtime(token: token) }
+    }
+
+    private func stopRealtime() {
+        realtimeTask?.cancel()
+        realtimeTask = nil
+        realtimeSocket?.cancel(with: .goingAway, reason: nil)
+        realtimeSocket = nil
+    }
+
+    private func runRealtime(token: String) async {
+        while !Task.isCancelled {
+            guard var components = URLComponents(url: Backend.baseURL, resolvingAgainstBaseURL: false) else { return }
+            components.scheme = "wss"
+            components.path = "/realtime/v1/websocket"
+            components.queryItems = [
+                URLQueryItem(name: "apikey", value: Backend.publishableKey),
+                URLQueryItem(name: "vsn", value: "1.0.0")
+            ]
+            guard let url = components.url else { return }
+            let socket = URLSession.shared.webSocketTask(with: url)
+            realtimeSocket = socket
+            socket.resume()
+            let changes = ["posts", "comments", "messages", "notifications"].map { ["event": "*", "schema": "public", "table": $0] }
+            let config: [String: Any] = [
+                "broadcast": ["ack": false, "self": false],
+                "presence": ["enabled": false],
+                "postgres_changes": changes,
+                "private": false
+            ]
+            let payload: [String: Any] = ["config": config, "access_token": token]
+            let join: [String: Any] = ["topic": "realtime:skillect-mvp", "event": "phx_join", "payload": payload, "ref": "1", "join_ref": "1"]
+            if let data = try? JSONSerialization.data(withJSONObject: join), let text = String(data: data, encoding: .utf8) {
+                try? await socket.send(.string(text))
+            }
+            let heartbeat = Task {
+                var counter = 2
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 25_000_000_000)
+                    let message: [String: Any] = ["topic": "phoenix", "event": "heartbeat", "payload": [:], "ref": String(counter)]
+                    counter += 1
+                    if let data = try? JSONSerialization.data(withJSONObject: message), let text = String(data: data, encoding: .utf8) {
+                        try? await socket.send(.string(text))
+                    }
+                }
+            }
+            do {
+                while !Task.isCancelled {
+                    let incoming = try await socket.receive()
+                    guard case .string(let raw) = incoming,
+                          let data = raw.data(using: .utf8),
+                          let message = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                          message["event"] as? String == "postgres_changes" else { continue }
+                    await loadFeed()
+                    await loadDirectory()
+                    await loadConversations()
+                    if let conversationId = activeConversationId { await loadChatMessages(conversationId) }
+                }
+            } catch {
+                // Reconnect after network loss or app backgrounding.
+            }
+            heartbeat.cancel()
+            socket.cancel(with: .goingAway, reason: nil)
+            if Task.isCancelled { return }
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+        }
+    }
+
+    private func request(path: String, method: String = "GET", body: Data? = nil, authenticated: Bool = true, prefer: String? = nil, contentType: String = "application/json") async throws -> Data {
         var request = URLRequest(url: URL(string: path, relativeTo: Backend.baseURL)!.absoluteURL)
         request.httpMethod = method
         request.setValue(Backend.publishableKey, forHTTPHeaderField: "apikey")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         if authenticated, let accessToken { request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization") }
         if let prefer { request.setValue(prefer, forHTTPHeaderField: "Prefer") }
         request.httpBody = body
