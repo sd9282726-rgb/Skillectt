@@ -38,7 +38,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore and feature-patch MainActivity
+      - name: Restore, feature-patch, and polish MainActivity
         run: |
           set -euo pipefail
           TARGET="native/android/app/src/main/java/com/skillect/app/MainActivity.kt"
@@ -46,10 +46,11 @@ jobs:
           curl -fsSL -o "$TARGET" \
             "https://raw.githubusercontent.com/sd9282726-rgb/Skillectt/f88c8f0617db8d3188ebf9a66f6e9e0f4ca16e7c/native/android/app/src/main/java/com/skillect/app/MainActivity.kt"
           python3 native/android/scripts/apply_features.py "$TARGET"
+          python3 native/android/scripts/polish_features.py "$TARGET"
           wc -c "$TARGET"
-          grep -n "AuthGate\|OnboardingGate\|CommunityCreateForm\|createCommunity" "$TARGET" | head
+          grep -n "AuthGate\|OnboardingGate\|CommunityCreateForm\|Sign out\|followUser\|Your feed is ready" "$TARGET" | head -20
 
-      - name: Commit restored MainActivity to main
+      - name: Commit polished MainActivity to main
         if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
         run: |
           git config user.name "github-actions[bot]"
@@ -58,7 +59,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No MainActivity changes to commit"
           else
-            git commit -m "Restore MainActivity with signup, DOB onboarding, community create"
+            git commit -m "MainActivity: signup, DOB onboarding, communities, polish"
             git push
           fi
 
