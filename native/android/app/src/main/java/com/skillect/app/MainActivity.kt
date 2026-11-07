@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -487,7 +488,6 @@ private fun MessagesScreen(token: String, userId: String) {
                 val item = arr.getJSONObject(i)
                 SimpleItem(item.optString("id"), if (item.optString("sender_id") == userId) "You" else title, item.optString("content"))
             }
-            api("POST", "/rest/v1/conversation_reads", token, JSONObject().put("conversation_id", id).put("user_id", userId).put("last_read_at", java.time.Instant.now().toString()))
         } catch (e: Exception) {
             errorText = e.message
         }
