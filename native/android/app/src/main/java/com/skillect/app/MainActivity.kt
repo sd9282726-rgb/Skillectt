@@ -100,6 +100,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     var posts by remember { mutableStateOf<List<Post>>(emptyList()) }
     var likedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var savedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var followingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var tab by remember { mutableStateOf("Home") }
     var feedMode by remember { mutableStateOf("For you") }
     var refresh by remember { mutableIntStateOf(0) }
@@ -127,6 +128,15 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         return true
     }
 
+    suspend fun loadFollowing() {
+        val active = token ?: return
+        val me = userId ?: return
+        try {
+            val arr = apiArray("/rest/v1/follows?select=following_id&follower_id=eq.$me", active)
+            followingIds = (0 until arr.length()).map { arr.getJSONObject(it).optString("following_id") }.toSet()
+        } catch (e: Exception) { error = e.message }
+    }
+
     suspend fun loadUser() {
         val active = token ?: return
         try {
@@ -152,17 +162,17 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     suspend fun loadFeed() {
         try {
             val me = userId
-            val followingIds = if (feedMode == "Following" && me != null) {
+            val followedUserIds = if (feedMode == "Following" && me != null) {
                 val following = apiArray("/rest/v1/follows?select=following_id&follower_id=eq.$me", token)
                 (0 until following.length()).map { following.getJSONObject(it).optString("following_id") }.filter { it.isNotBlank() }
             } else emptyList()
-            if (feedMode == "Following" && followingIds.isEmpty()) {
+            if (feedMode == "Following" && followedUserIds.isEmpty()) {
                 posts = emptyList()
                 likedIds = emptySet()
                 savedIds = emptySet()
                 return
             }
-            val authorFilter = if (feedMode == "Following") "&author_id=in.(" + followingIds.joinToString(",") + ")" else ""
+            val authorFilter = if (feedMode == "Following") "&author_id=in.(" + followedUserIds.joinToString(",") + ")" else ""
             val feedPath = "/rest/v1/posts?select=id,author_id,content,image_url,media_type,likes_count,comments_count,profiles(display_name,username)" + authorFilter + "&moderation_hidden=eq.false&order=created_at.desc&limit=50"
             val arr = apiArray(feedPath, token)
             posts = (0 until arr.length()).map { i ->
@@ -353,11 +363,14 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             val existing = apiArray("/rest/v1/follows?select=id&follower_id=eq.$me&following_id=eq.$targetId", active)
             if (existing.length() > 0) {
                 api("DELETE", "/rest/v1/follows?follower_id=eq.$me&following_id=eq.$targetId", active)
+                followingIds = followingIds - targetId
                 error = "Unfollowed"
             } else {
                 api("POST","/rest/v1/follows",active,JSONObject().put("follower_id",me).put("following_id",targetId))
+                followingIds = followingIds + targetId
                 error = "Followed"
             }
+            if (feedMode == "Following") loadFeed()
         } catch(e:Exception){ error=e.message }
     }
 
@@ -388,7 +401,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     }
 
     LaunchedEffect(token, refresh) {
-        if (token != null) loadUser()
+        if (token != null) { loadUser(); loadFollowing() }
         loadFeed()
         loadProjects()
         loadCommunities()
@@ -568,7 +581,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                                 }
                             }
                             Text(person.detail.ifBlank { "Building and sharing on Skillect." }, color = MutedNav, modifier = Modifier.padding(vertical = 8.dp))
-                            Button(onClick = { if (requireAccount()) scope.launch { followUser(person.id) } }, modifier = Modifier.fillMaxWidth()) { Text("Follow") }
+                            Button(onClick = { if (requireAccount()) scope.launch { followUser(person.id) } }, modifier = Modifier.fillMaxWidth()) { Text(if (followingIds.contains(person.id)) "Following · tap to unfollow" else "Follow") }
                             Text("Posts", color = Ink, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
                             if (selectedPersonPosts.isEmpty()) Text("No public posts yet", color = MutedNav)
                             else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -679,6 +692,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                             isPrivate = false
                             likedIds = emptySet()
                             savedIds = emptySet()
+                            followingIds = emptySet()
                             selectedPerson = null
                             selectedPersonPosts = emptyList()
                             feedMode = "For you"
