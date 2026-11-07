@@ -33,10 +33,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
 
-private val Blue = Color(0xFF00C878)
-private val Ink = Color(0xFFF2F2F2)
+private val Blue = Color(0xFF60A5FA)
+private val Ink = Color(0xFFE8EEF8)
 private val SkillectBlack = Color(0xFF050509)
-private val MutedNav = Color(0xFF77748C)
+private val MutedNav = Color(0xFF94A3B8)
 private val client = OkHttpClient()
 private const val URL = BuildConfig.SUPABASE_URL
 private const val KEY = BuildConfig.SUPABASE_KEY
@@ -78,7 +78,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     var posts by remember { mutableStateOf<List<Post>>(emptyList()) }
     var likedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var savedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var tab by remember { mutableStateOf("Feed") }
+    var tab by remember { mutableStateOf("Home") }
     var refresh by remember { mutableIntStateOf(0) }
     var createText by remember { mutableStateOf("") }
     var searchText by remember { mutableStateOf("") }
@@ -267,7 +267,6 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             selectedCommunityId = null
         } catch (e: Exception) { error = e.message }
     }
-
     suspend fun updateProfile() {
         val active = token ?: return
         val me = userId ?: return
@@ -351,7 +350,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             val body = JSONObject().put("type", "post").put("content", createText.trim()).put("tags", JSONArray())
             api("POST", "/functions/v1/moderate-text", active, body)
             createText = ""
-            tab = "Feed"
+            tab = "Home"
             loadFeed()
             error = null
         } catch (e: Exception) {
@@ -441,16 +440,14 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             }},
             bottomBar={
                 NavigationBar(containerColor=SkillectBlack,contentColor=MutedNav,tonalElevation=0.dp) {
-                    listOf("Feed","Explore","Communities","Create","Messages","Notifications","Settings","Profile").forEach { item ->
+                    listOf("Home","Explore","Communities","Messages","Notifications","Create","Profile","Settings").forEach { item ->
                         NavigationBarItem(
                             selected=tab==item,
                             onClick={
                                 tab=item
                                 if(item=="Communities") scope.launch { loadCommunities() }
-                                if(item=="Notifications") scope.launch { loadNotifications() }
-                                if(item=="Settings") scope.launch { loadBlocked() }
                             },
-                            icon={Text(when(item){"Feed"->"⌂";"Explore"->"◈";"Communities"->"♧";"Create"->"⊞";"Messages"->"○";"Notifications"->"◉";"Settings"->"⚙";else->"♙"},fontSize=25.sp)},
+                            icon={Text(when(item){"Feed"->"⌂";"Explore"->"◈";"Communities"->"♧";"Create"->"⊞";"Messages"->"○";else->"♙"},fontSize=25.sp)},
                             label={Text(item,fontSize=10.sp)},
                             colors=NavigationBarItemDefaults.colors(selectedIconColor=Blue,selectedTextColor=Blue,unselectedIconColor=MutedNav,unselectedTextColor=MutedNav,indicatorColor=SkillectBlack)
                         )
@@ -461,7 +458,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             Column(Modifier.fillMaxSize().background(SkillectBlack).padding(padding)) {
                 error?.let { Text(it,color=Color.Red,modifier=Modifier.padding(horizontal=16.dp,vertical=6.dp)) }
                 when(tab) {
-                    "Feed" -> {
+                    "Home" -> {
                         Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=10.dp),horizontalArrangement=Arrangement.SpaceBetween) {
                             Text("Your learning feed",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
                             TextButton(onClick={scope.launch{loadFeed()}}){Text("Refresh")}
@@ -503,7 +500,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         val activeUserId = userId
                         if (activeToken != null && activeUserId != null) {
                             ModeratedCreatePostScreen(activeToken, activeUserId) {
-                                tab = "Feed"
+                                tab = "Home"
                                 scope.launch { loadFeed() }
                             }
                         } else {
@@ -550,13 +547,9 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                             )
                             Text("Discover", fontWeight=FontWeight.Bold, color=Ink, modifier=Modifier.padding(top=8.dp, bottom=6.dp))
                         }
-                        items(communities){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp), colors=CardDefaults.cardColors(containerColor=Color(0xFF15151D))){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold,color=Ink);Text(item.detail,color=Color.Gray);Row(horizontalArrangement=Arrangement.spacedBy(8.dp), modifier=Modifier.padding(top=6.dp)) {
-                                Button(onClick={scope.launch{joinCommunity(item.id)}}){Text("Join")}
-                                OutlinedButton(onClick={scope.launch{leaveCommunity(item.id)}}){Text("Leave")}
-                            }}} }
+                        items(communities){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp), colors=CardDefaults.cardColors(containerColor=Color(0xFF15151D))){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold,color=Ink);Text(item.detail,color=Color.Gray);Button(onClick={scope.launch{joinCommunity(item.id)}},modifier=Modifier.padding(top=6.dp)){Text("Join")}}} }
                     }
-                    
-                    "Settings" -> SettingsScreen(
+                                        "Settings" -> SettingsScreen(
                         isPrivate = isPrivate,
                         onTogglePrivate = { v -> scope.launch { setPrivateProfile(v) } },
                         blocked = blockedUsers,
