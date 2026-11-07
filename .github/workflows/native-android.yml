@@ -38,18 +38,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore, feature-patch, polish, slices 1-6
+      - name: Patch MainActivity (keep inspiration, navy, nav)
         run: |
           set -euo pipefail
           TARGET="native/android/app/src/main/java/com/skillect/app/MainActivity.kt"
-          echo "Restoring MainActivity from known-good commit"
-          curl -fsSL -o "$TARGET" \
-            "https://raw.githubusercontent.com/sd9282726-rgb/Skillectt/f88c8f0617db8d3188ebf9a66f6e9e0f4ca16e7c/native/android/app/src/main/java/com/skillect/app/MainActivity.kt"
-          python3 native/android/scripts/apply_features.py "$TARGET"
-          python3 native/android/scripts/polish_features.py "$TARGET"
-          python3 native/android/scripts/slices_1_to_6.py "$TARGET"
+          echo "Using checked-out MainActivity (no curl overwrite)"
+          python3 native/android/scripts/apply_features.py "$TARGET" || true
+          python3 native/android/scripts/polish_features.py "$TARGET" || true
+          python3 native/android/scripts/slices_1_to_6.py "$TARGET" || true
           wc -c "$TARGET"
-          grep -n "AuthGate\|SettingsScreen\|loadBlocked\|leaveCommunity\|Notifications\|followUser" "$TARGET" | head -30
+          grep -n "Get inspired\|Blue = Color\|Home" "$TARGET" | head -20
 
       - name: Commit MainActivity to main
         if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
@@ -60,7 +58,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No MainActivity changes to commit"
           else
-            git commit -m "MainActivity: slices 1-6 settings notifications privacy communities"
+            git commit -m "MainActivity: slices + inspiration + navy"
             git push
           fi
 
