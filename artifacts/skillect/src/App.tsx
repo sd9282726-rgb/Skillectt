@@ -22,6 +22,7 @@ import UserProfilePage from "@/pages/UserProfilePage";
 import PostDetail from "@/pages/PostDetail";
 import Messages from "@/pages/Messages";
 import Conversation from "@/pages/Conversation";
+import Notifications from "@/pages/Notifications";
 
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
@@ -133,6 +134,14 @@ function AppRoutes() {
         {(params) => (
           <AuthedRoute>
             <PostDetail id={params.id} />
+          </AuthedRoute>
+        )}
+      </Route>
+
+      <Route path="/notifications">
+        {() => (
+          <AuthedRoute>
+            <Notifications />
           </AuthedRoute>
         )}
       </Route>
