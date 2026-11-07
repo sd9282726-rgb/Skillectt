@@ -38,31 +38,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Patch MainActivity (inspiration + navy + nav)
-        run: |
-          set -euo pipefail
-          TARGET="native/android/app/src/main/java/com/skillect/app/MainActivity.kt"
-          echo "Using checked-out MainActivity (no curl overwrite)"
-          python3 native/android/scripts/apply_features.py "$TARGET" || true
-          python3 native/android/scripts/polish_features.py "$TARGET" || true
-          python3 native/android/scripts/slices_1_to_6.py "$TARGET" || true
-          python3 native/android/scripts/inject_inspiration.py "$TARGET" || true
-          wc -c "$TARGET"
-          grep -n "Get inspired\|Blue = Color\|Home" "$TARGET" | head -20
-
-      - name: Commit MainActivity to main
-        if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add native/android/app/src/main/java/com/skillect/app/MainActivity.kt
-          if git diff --cached --quiet; then
-            echo "No MainActivity changes to commit"
-          else
-            git commit -m "MainActivity: inspiration strip + slices + navy"
-            git push
-          fi
-
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
