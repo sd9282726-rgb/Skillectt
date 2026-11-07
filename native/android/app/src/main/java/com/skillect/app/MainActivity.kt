@@ -132,7 +132,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             val u = api("GET", "/auth/v1/user", active)
             userId = u.optString("id").takeIf { it.isNotBlank() }
             val id = userId ?: return
-            val arr = apiArray("/rest/v1/profiles?select=display_name,username,bio,onboarded,date_of_birth,is_private&id=eq.$id&limit=1", active)
+            val arr = apiArray("/rest/v1/profiles?select=display_name,username,bio,onboarded,is_private&id=eq.$id&limit=1", active)
             if (arr.length() > 0) {
                 val p = arr.getJSONObject(0)
                 displayName = p.optString("display_name")
@@ -141,7 +141,6 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                 onboarded = p.optBoolean("onboarded", true)
                 if (!onboarded) tab = "Profile"
                 isPrivate = p.optBoolean("is_private", false)
-                if (!p.isNull("date_of_birth")) dateOfBirth = p.optString("date_of_birth")
             } else {
                 onboarded = false
                 tab = "Profile"
