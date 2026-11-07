@@ -156,7 +156,7 @@ private struct NotificationsView: View {
                 ForEach(model.notifications) { notification in
                     HStack(alignment: .top, spacing: 12) {
                         Image(systemName: notification.read ? "bell" : "bell.badge.fill")
-                            .foregroundStyle(notification.read ? .secondary : .blue)
+                            .foregroundColor(notification.read ? .secondary : .blue)
                         VStack(alignment: .leading, spacing: 5) {
                             Text(notification.type.replacingOccurrences(of: "_", with: " ").capitalized)
                                 .font(.headline)
@@ -302,7 +302,7 @@ private struct PostCard: View {
             HStack {
                 Button { Task { await model.toggleLike(post) } } label: {
                     Label("\(post.likes_count)", systemImage: model.likedIds.contains(post.id) ? "heart.fill" : "heart")
-                        .foregroundStyle(model.likedIds.contains(post.id) ? .pink : .secondary)
+                        .foregroundColor(model.likedIds.contains(post.id) ? .systemPink : .secondaryLabel)
                 }
                 Spacer()
                 Button { showComments = true; model.activeCommentsPostId = post.id; Task { await model.loadComments(postId: post.id) } } label: {
