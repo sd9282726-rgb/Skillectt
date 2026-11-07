@@ -119,10 +119,12 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                 username = p.optString("username")
                 bio = p.optString("bio")
                 onboarded = p.optBoolean("onboarded", true)
+                if (!onboarded) tab = "Profile"
                 isPrivate = p.optBoolean("is_private", false)
                 if (!p.isNull("date_of_birth")) dateOfBirth = p.optString("date_of_birth")
             } else {
                 onboarded = false
+                tab = "Profile"
             }
         } catch (e: Exception) { error = e.message }
     }
@@ -210,6 +212,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     suspend fun completeOnboarding() {
         val active = token ?: return
         val me = userId ?: return
+        if (!isAtLeast16(dateOfBirth)) { error = "Skillect is for people aged 16 and above. Enter a valid date of birth."; return }
         busy = true
         error = null
         try {
@@ -455,7 +458,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                                     Card(
                                         colors=CardDefaults.cardColors(containerColor=NavySurface),
                                         shape=RoundedCornerShape(14.dp),
-                                        modifier=Modifier.weight(1f).clickable { tab = go }
+                                        modifier=Modifier.weight(1f).clickable { if (go == "Create") { if (requireAccount()) tab = go } else tab = go }
                                     ) {
                                         Column(Modifier.padding(10.dp)) {
                                             Text(title, color=Ink, fontSize=11.sp, fontWeight=FontWeight.SemiBold, maxLines=2)
@@ -473,7 +476,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                             Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement=Arrangement.Center) {
                                 Text("Your feed is ready", color=Ink, fontSize=20.sp, fontWeight=FontWeight.Bold)
                                 Text("Follow people, join communities, or create your first skill update.", color=Color.Gray, modifier=Modifier.padding(top=8.dp))
-                                Button(onClick={tab="Create"}, modifier=Modifier.padding(top=16.dp)){Text("Create a post")}
+                                Button(onClick={if(requireAccount()) tab="Create"}, modifier=Modifier.padding(top=16.dp)){Text("Create a post")}
                             }
                         }
                         else LazyColumn(contentPadding=PaddingValues(14.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
@@ -510,7 +513,11 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                                 scope.launch { loadFeed() }
                             }
                         } else {
-                            Text("Preparing your account…", color = Ink, modifier = Modifier.padding(20.dp))
+                            Column(Modifier.fillMaxWidth().padding(24.dp)) {
+                                Text("Your profile unlocks posting", color=Ink, fontSize=18.sp, fontWeight=FontWeight.Bold)
+                                Text("Sign in or create a profile from the Profile tab to share your work.", color=MutedNav, modifier=Modifier.padding(top=8.dp))
+                                TextButton(onClick={tab="Profile"}) { Text("Go to Profile") }
+                            }
                         }
                     }
                     "Projects" -> Column(Modifier.fillMaxSize().padding(16.dp)) {
