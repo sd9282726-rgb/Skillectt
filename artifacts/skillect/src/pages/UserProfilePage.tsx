@@ -52,7 +52,7 @@ export default function UserProfilePage({ id }: { id: string }) {
       setLoading(true);
 
       const [profileRes, postsRes, followersRes, followingRes] = await Promise.all([
-        supabase.from("profiles").select("*").eq("id", id).single(),
+        supabase.from("profiles").select("id,display_name,username,avatar_url,bio,location,skills,is_private").eq("id", id).single(),
         supabase
           .from("posts")
           .select("*")
