@@ -222,19 +222,20 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     }
 
     suspend fun createPost() {
-        val active=token ?: return
-        val author=userId ?: return
-        if(createText.isBlank()) return
-        busy=true
+        val active = token ?: return
+        if (createText.isBlank()) return
+        busy = true
         try {
-            val body=JSONObject().put("author_id",author).put("content",createText.trim()).put("tags",JSONArray())
-            api("POST","/rest/v1/posts",active,body)
-            createText=""
-            tab="Feed"
+            val body = JSONObject().put("type", "post").put("content", createText.trim()).put("tags", JSONArray())
+            api("POST", "/functions/v1/moderate-text", active, body)
+            createText = ""
+            tab = "Feed"
             loadFeed()
-            error=null
-        } catch(e:Exception){ error=e.message }
-        busy=false
+            error = null
+        } catch (e: Exception) {
+            error = e.message
+        }
+        busy = false
     }
 
     suspend fun toggleLike(post:Post) {
@@ -365,10 +366,17 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         Button(onClick={scope.launch{searchPeople()}},modifier=Modifier.padding(top=8.dp)){Text("Search")}
                         LazyColumn { items(results){ item -> Card(Modifier.fillMaxWidth().padding(vertical=5.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);TextButton(onClick={scope.launch{blockUser(item.id)}}){Text("Block")}}} } }
                     }
-                    "Create" -> Column(Modifier.fillMaxSize().padding(16.dp)) {
-                        Text("Share your progress",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
-                        OutlinedTextField(createText,{createText=it},label={Text("What are you learning or building?")},modifier=Modifier.fillMaxWidth().heightIn(min=150.dp),maxLines=8)
-                        Button(onClick={scope.launch{createPost()}},enabled=createText.isNotBlank()&&!busy,modifier=Modifier.padding(top=12.dp)){Text(if(busy)"Publishing…" else "Publish post")}
+                    "Create" -> {
+                        val activeToken = token
+                        val activeUserId = userId
+                        if (activeToken != null && activeUserId != null) {
+                            ModeratedCreatePostScreen(activeToken, activeUserId) {
+                                tab = "Feed"
+                                scope.launch { loadFeed() }
+                            }
+                        } else {
+                            Text("Preparing your account…", color = Ink, modifier = Modifier.padding(20.dp))
+                        }
                     }
                     "Projects" -> Column(Modifier.fillMaxSize().padding(16.dp)) {
                         Text("Projects & builds",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
