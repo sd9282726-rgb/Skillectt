@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Switch, Route, Redirect, Router as WouterRouter } from "wouter";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -27,21 +28,48 @@ import Notifications from "@/pages/Notifications";
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
+function LoadingScreen() {
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-white">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+    </div>
+  );
+}
+
+function ProfileRecovery() {
+  const { profile, refreshProfile, isProfileLoading } = useApp();
+  const { signOut } = useAuth();
+  const [retrying, setRetrying] = useState(false);
+
+  if (profile && !profile.onboarded) return <Onboarding />;
+
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-white px-4">
+      <div className="w-full max-w-md rounded-2xl border border-gray-200 p-6 text-center">
+        <h1 className="text-lg font-bold text-gray-900">Finishing your account setup</h1>
+        <p className="mt-2 text-sm text-gray-600">Skillect could not load your profile yet. Retry setup or sign out and sign in again.</p>
+        <button
+          type="button"
+          disabled={retrying || isProfileLoading}
+          onClick={async () => { setRetrying(true); await refreshProfile(); setRetrying(false); }}
+          className="mt-5 w-full rounded-full bg-blue-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+        >
+          {retrying || isProfileLoading ? "Checking…" : "Retry profile setup"}
+        </button>
+        <button type="button" onClick={() => void signOut()} className="mt-3 text-sm font-medium text-gray-500">Sign out</button>
+      </div>
+    </div>
+  );
+}
+
 function HomeRedirect() {
   const { user, loading } = useAuth();
   const { profile, isProfileLoading } = useApp();
 
-  if (loading || isProfileLoading) {
-    return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-white">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-      </div>
-    );
-  }
-
+  if (loading || (user && isProfileLoading)) return <LoadingScreen />;
   if (!user) return <Landing />;
-
-  if (profile && !profile.onboarded) return <Onboarding />;
+  if (!profile) return <ProfileRecovery />;
+  if (!profile.onboarded) return <Onboarding />;
 
   return (
     <Shell>
@@ -52,16 +80,12 @@ function HomeRedirect() {
 
 function AuthedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const { profile, isProfileLoading } = useApp();
 
-  if (loading) {
-    return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-white">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-      </div>
-    );
-  }
-
+  if (loading || (user && isProfileLoading)) return <LoadingScreen />;
   if (!user) return <Redirect to="/sign-in" />;
+  if (!profile) return <ProfileRecovery />;
+  if (!profile.onboarded) return <Onboarding />;
 
   return <Shell>{children}</Shell>;
 }
