@@ -16,8 +16,8 @@ android {
         applicationId = "com.skillect.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.5.0"
+        versionCode = 9
+        versionName = "1.6.0"
         buildConfigField("String", "SUPABASE_URL", "\"https://chohswyxsckpwyzlbzav.supabase.co\"")
         buildConfigField("String", "SUPABASE_KEY", "\"sb_publishable__1Bd6TEnLWDtTdT4U4e-oQ_0MeY2E17\"")
     }
