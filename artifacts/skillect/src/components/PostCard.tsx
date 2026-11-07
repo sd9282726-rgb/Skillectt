@@ -9,6 +9,7 @@ export interface PostCardPost {
   id: string;
   content: string;
   image?: string;
+  mediaType?: "image" | "video" | "text";
   tags: string[];
   likesCount: number;
   commentsCount: number;
@@ -95,13 +96,21 @@ export default function PostCard({ post }: { post: PostCardPost }) {
           )}
 
           {post.image && (
-            <Link href={`/post/${post.id}`}>
-              <img
-                src={post.image}
-                alt=""
-                className="mt-3 w-full max-h-96 object-cover rounded-xl border border-gray-200"
-              />
-            </Link>
+            <div className="mt-3 overflow-hidden rounded-xl border border-gray-200 bg-black">
+              {post.mediaType === "video" ? (
+                <video
+                  src={post.image}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="max-h-[480px] w-full object-contain"
+                />
+              ) : (
+                <Link href={`/post/${post.id}`}>
+                  <img src={post.image} alt="" loading="lazy" className="max-h-96 w-full object-contain" />
+                </Link>
+              )}
+            </div>
           )}
 
           <div className="flex items-center gap-5 mt-3.5">
