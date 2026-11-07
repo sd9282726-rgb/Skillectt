@@ -108,10 +108,16 @@ export default function Profile() {
     if (!projectTitle.trim() || projectSaving) return;
     setProjectSaving(true);
     setProjectError(null);
+    const cleanLink = projectLink.trim();
+    if (cleanLink && !/^https?:\\/\\//i.test(cleanLink)) {
+      setProjectError("Project links must start with https:// or http://");
+      setProjectSaving(false);
+      return;
+    }
     const payload = {
       title: projectTitle.trim(),
       description: projectDescription.trim(),
-      link: projectLink.trim() || null,
+      link: cleanLink || null,
       status: projectStatus,
     };
     const result = editingProject
@@ -132,6 +138,7 @@ export default function Profile() {
   };
 
   const deleteProject = async (project: Project) => {
+    if (!window.confirm(`Delete “${project.title}”? This cannot be undone.`)) return;
     const { error: deleteError } = await supabase
       .from("projects")
       .delete()
