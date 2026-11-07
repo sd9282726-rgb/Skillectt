@@ -33,9 +33,13 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
 
-private val Blue = Color(0xFF60A5FA)
+private val Blue = Color(0xFF72B7FF)
+private val Navy = Color(0xFF07172B)
+private val NavySurface = Color(0xFF10243D)
+private val NavyRaised = Color(0xFF17314F)
+private val NavyLine = Color(0xFF294766)
 private val Ink = Color(0xFFE8EEF8)
-private val SkillectBlack = Color(0xFF050509)
+private val SkillectBlack = Navy
 private val MutedNav = Color(0xFF94A3B8)
 private val client = OkHttpClient()
 private const val URL = BuildConfig.SUPABASE_URL
@@ -49,7 +53,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val prefs = getSharedPreferences("skillect-session", MODE_PRIVATE)
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme(primary = Blue, background = SkillectBlack, surface = SkillectBlack)) {
+            MaterialTheme(colorScheme = darkColorScheme(primary = Blue, secondary = Color(0xFF8BC8FF), background = SkillectBlack, surface = NavySurface, surfaceVariant = NavyRaised, outline = NavyLine)) {
                 SkillectApp(
                     initialToken = prefs.getString("token", null),
                     onToken = { token -> prefs.edit().putString("token", token).apply() },
@@ -94,7 +98,13 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     var showCommentsFor by remember { mutableStateOf<String?>(null) }
     var comments by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
     var commentText by remember { mutableStateOf("") }
+    var showAuthPrompt by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    fun requireAccount(): Boolean {
+        if (token == null) { showAuthPrompt = true; return false }
+        return true
+    }
 
     suspend fun loadUser() {
         val active = token ?: return
@@ -118,9 +128,8 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     }
 
     suspend fun loadFeed() {
-        val active = token ?: return
         try {
-            val arr = apiArray("/rest/v1/posts?select=id,author_id,content,image_url,media_type,likes_count,comments_count,profiles(display_name,username),media_assets(public_url,media_type,status)&moderation_hidden=eq.false&order=created_at.desc&limit=50", active)
+            val arr = apiArray("/rest/v1/posts?select=id,author_id,content,image_url,media_type,likes_count,comments_count,profiles(display_name,username),media_assets(public_url,media_type,status)&moderation_hidden=eq.false&order=created_at.desc&limit=50", token)
             posts = (0 until arr.length()).map { i ->
                 val p = arr.getJSONObject(i); val profile = p.optJSONObject("profiles") ?: JSONObject()
                 Post(p.optString("id"), p.optString("author_id"), p.optString("content"), profile.optString("display_name", "Skillect member"), profile.optString("username", "member"), p.optString("image_url").takeIf { it.isNotBlank() }, p.optJSONArray("media_assets")?.let { assets -> (0 until assets.length()).map { assets.getJSONObject(it) }.firstOrNull { it.optString("status") == "approved" }?.optString("public_url")?.takeIf { it.isNotBlank() } }, p.optString("media_type", "text"), p.optInt("likes_count"), p.optInt("comments_count"))
@@ -136,17 +145,15 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     }
 
     suspend fun loadProjects() {
-        val active = token ?: return
         try {
-            val arr = apiArray("/rest/v1/projects?select=id,title,description,status&order=created_at.desc&limit=40", active)
+            val arr = apiArray("/rest/v1/projects?select=id,title,description,status&order=created_at.desc&limit=40", token)
             projects = (0 until arr.length()).map { val p=arr.getJSONObject(it); SimpleItem(p.optString("id"),p.optString("title"),p.optString("description")) }
         } catch (e: Exception) { error=e.message }
     }
 
     suspend fun loadCommunities() {
-        val active = token ?: return
         try {
-            val arr = apiArray("/rest/v1/communities?select=id,name,description,member_count&order=created_at.desc&limit=40", active)
+            val arr = apiArray("/rest/v1/communities?select=id,name,description,member_count&order=created_at.desc&limit=40", token)
             communities = (0 until arr.length()).map { val p=arr.getJSONObject(it); SimpleItem(p.optString("id"),p.optString("name"),p.optString("description")) }
         } catch (e: Exception) { error=e.message }
     }
@@ -324,22 +331,19 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     }
 
     suspend fun searchPeople() {
-        val active=token ?: return
         if (searchText.isBlank()) { results=emptyList(); return }
         try {
             val q=URLEncoder.encode(searchText.trim(), "UTF-8")
-            val arr=apiArray("/rest/v1/profiles?select=id,display_name,username,bio&or=(username.ilike.%25$q%25,display_name.ilike.%25$q%25)&limit=30",active)
+            val arr=apiArray("/rest/v1/profiles?select=id,display_name,username,bio&or=(username.ilike.%25$q%25,display_name.ilike.%25$q%25)&limit=30",token)
             results=(0 until arr.length()).map { val p=arr.getJSONObject(it); SimpleItem(p.optString("id"),p.optString("display_name")+"  @"+p.optString("username"),p.optString("bio")) }
         } catch(e:Exception){ error=e.message }
     }
 
     LaunchedEffect(token, refresh) {
-        if (token != null) {
-            loadUser()
-            loadFeed()
-            loadProjects()
-            loadCommunities()
-        }
+        if (token != null) loadUser()
+        loadFeed()
+        loadProjects()
+        loadCommunities()
     }
 
     suspend fun createPost() {
@@ -389,9 +393,8 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     }
 
     suspend fun loadComments(postId:String) {
-        val active=token ?: return
         try {
-            val arr=apiArray("/rest/v1/comments?select=id,content,profiles(display_name)&post_id=eq.$postId&order=created_at.asc&limit=100",active)
+            val arr=apiArray("/rest/v1/comments?select=id,content,profiles(display_name)&post_id=eq.$postId&order=created_at.asc&limit=100",token)
             comments=(0 until arr.length()).map { val p=arr.getJSONObject(it); val profile=p.optJSONObject("profiles")?:JSONObject(); SimpleItem(p.optString("id"),profile.optString("display_name","Member"),p.optString("content")) }
         } catch(e:Exception){ error=e.message }
     }
@@ -408,46 +411,27 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         } catch(e:Exception){ error=e.message }
     }
 
-    if (token == null) {
-        AuthGate(
-            busy = busy,
-            error = error,
-            onClearError = { error = null },
-            onSignedIn = { newToken -> token = newToken; onToken(newToken) },
-            apiPost = { path, tok, body -> api("POST", path, tok, body) }
-        )
-    } else if (!onboarded) {
-        OnboardingGate(
-            displayName = displayName,
-            onDisplayName = { displayName = it },
-            username = username,
-            onUsername = { username = it },
-            bio = bio,
-            onBio = { bio = it },
-            dateOfBirth = dateOfBirth,
-            onDateOfBirth = { dateOfBirth = it },
-            busy = busy,
-            error = error,
-            onFinish = { scope.launch { completeOnboarding() } }
-        )
-    } else {
-        Scaffold(
+    Scaffold(
             topBar={ Row(Modifier.fillMaxWidth().height(72.dp).background(SkillectBlack).padding(horizontal=22.dp),verticalAlignment=Alignment.CenterVertically) {
                 Box(Modifier.size(42.dp).background(Color(0xFF101018),RoundedCornerShape(12.dp)),contentAlignment=Alignment.Center) {
                     Text("s",color=Blue,fontSize=34.sp,fontWeight=FontWeight.Bold)
                 }
-                Text("Skillect",color=Blue,fontWeight=FontWeight.ExtraBold,fontSize=25.sp,modifier=Modifier.padding(start=14.dp))
+                Text("Skillect",color=Ink,fontWeight=FontWeight.ExtraBold,fontSize=25.sp,modifier=Modifier.padding(start=14.dp))
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick={ if(requireAccount()) tab="Messages" }) { Text("Inbox", color=Blue) }
+                TextButton(onClick={ if(requireAccount()) { tab="Notifications"; scope.launch { loadNotifications() } } }) { Text("Alerts", color=Blue) }
             }},
             bottomBar={
                 NavigationBar(containerColor=SkillectBlack,contentColor=MutedNav,tonalElevation=0.dp) {
-                    listOf("Home","Explore","Communities","Messages","Notifications","Create","Profile","Settings").forEach { item ->
+                    listOf("Home","Explore","Communities","Create","Profile").forEach { item ->
                         NavigationBarItem(
                             selected=tab==item,
                             onClick={
+                                if (item == "Create" && !requireAccount()) return@NavigationBarItem
                                 tab=item
                                 if(item=="Communities") scope.launch { loadCommunities() }
                             },
-                            icon={Text(when(item){"Feed"->"⌂";"Explore"->"◈";"Communities"->"♧";"Create"->"⊞";"Messages"->"○";else->"♙"},fontSize=25.sp)},
+                            icon={Text(when(item){"Home"->"⌂";"Explore"->"⌕";"Communities"->"♧";"Create"->"＋";else->"♙"},fontSize=25.sp)},
                             label={Text(item,fontSize=10.sp)},
                             colors=NavigationBarItemDefaults.colors(selectedIconColor=Blue,selectedTextColor=Blue,unselectedIconColor=MutedNav,unselectedTextColor=MutedNav,indicatorColor=SkillectBlack)
                         )
@@ -469,7 +453,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                                     Triple("Join a club", "Communities", "Communities")
                                 ).forEach { (title, sub, go) ->
                                     Card(
-                                        colors=CardDefaults.cardColors(containerColor=Color(0xFF15151D)),
+                                        colors=CardDefaults.cardColors(containerColor=NavySurface),
                                         shape=RoundedCornerShape(14.dp),
                                         modifier=Modifier.weight(1f).clickable { tab = go }
                                     ) {
@@ -501,10 +485,10 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                                         Text(post.body,color=Ink,modifier=Modifier.padding(top=12.dp),lineHeight=22.sp)
                                         post.mediaUrl?.let { media -> if (post.mediaType == "video") { AndroidView(factory = { ctx -> VideoView(ctx).apply { setVideoURI(Uri.parse(media)); setOnPreparedListener { it.isLooping = false; start() } } }, modifier = Modifier.fillMaxWidth().height(240.dp).padding(top = 10.dp)) } else { AsyncImage(model = media, contentDescription = "Post image", modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(top = 10.dp)) } } ?: post.image?.let { AsyncImage(model = it, contentDescription = "Post image", modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(top = 10.dp)) }
                                         Row(Modifier.fillMaxWidth().padding(top=10.dp),horizontalArrangement=Arrangement.SpaceBetween) {
-                                            TextButton(onClick={scope.launch{toggleLike(post)}}){Text((if(likedIds.contains(post.id)) "♥ " else "♡ ")+post.likes)}
+                                            TextButton(onClick={if(requireAccount()) scope.launch{toggleLike(post)}}){Text((if(likedIds.contains(post.id)) "♥ " else "♡ ")+post.likes)}
                                             TextButton(onClick={scope.launch{showCommentsFor=post.id;loadComments(post.id)}}){Text("Comments ${post.comments}")}
-                                            TextButton(onClick={scope.launch{toggleSave(post)}}){Text(if(savedIds.contains(post.id)) "Saved" else "Save")}
-                                            TextButton(onClick={scope.launch{reportPost(post)}}){Text("Report")}
+                                            TextButton(onClick={if(requireAccount()) scope.launch{toggleSave(post)}}){Text(if(savedIds.contains(post.id)) "Saved" else "Save")}
+                                            TextButton(onClick={if(requireAccount()) scope.launch{reportPost(post)}}){Text("Report")}
                                         }
                                     }
                                 }
@@ -515,7 +499,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         Text("Find your people",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
                         OutlinedTextField(searchText,{searchText=it},label={Text("Search by name or username")},modifier=Modifier.fillMaxWidth())
                         Button(onClick={scope.launch{searchPeople()}},modifier=Modifier.padding(top=8.dp)){Text("Search")}
-                        LazyColumn { items(results){ item -> Card(Modifier.fillMaxWidth().padding(vertical=5.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);TextButton(onClick={scope.launch{followUser(item.id)}}){Text("Follow")}; TextButton(onClick={scope.launch{blockUser(item.id)}}){Text("Block")}}} } }
+                        LazyColumn { items(results){ item -> Card(Modifier.fillMaxWidth().padding(vertical=5.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);TextButton(onClick={if(requireAccount()) scope.launch{followUser(item.id)}}){Text("Follow")}; TextButton(onClick={if(requireAccount()) scope.launch{blockUser(item.id)}}){Text("Block")}}} } }
                     }
                     "Create" -> {
                         val activeToken = token
@@ -537,7 +521,20 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         LazyColumn { items(projects){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray)}} } }
                         TextButton(onClick={scope.launch{loadCommunities();tab="Communities"}}){Text("Explore communities")}
                     }
-                    "Profile" -> Column(Modifier.fillMaxSize().padding(20.dp)) {
+                    "Profile" -> if (token == null) {
+                        AuthGate(
+                            busy = busy, error = error, onClearError = { error = null },
+                            onSignedIn = { newToken -> token = newToken; onToken(newToken); tab = "Profile"; scope.launch { loadUser() } },
+                            apiPost = { path, tok, body -> api("POST", path, tok, body) }
+                        )
+                    } else if (!onboarded) {
+                        OnboardingGate(
+                            displayName = displayName, onDisplayName = { displayName = it },
+                            username = username, onUsername = { username = it }, bio = bio, onBio = { bio = it },
+                            dateOfBirth = dateOfBirth, onDateOfBirth = { dateOfBirth = it }, busy = busy, error = error,
+                            onFinish = { scope.launch { completeOnboarding() } }
+                        )
+                    } else Column(Modifier.fillMaxSize().padding(20.dp)) {
                         Text(displayName.ifBlank{"Your profile"},fontSize=25.sp,fontWeight=FontWeight.Bold,color=Ink)
                         Text("@$username",color=Color.Gray)
                         OutlinedTextField(displayName,{displayName=it},label={Text("Display name")},modifier=Modifier.fillMaxWidth())
@@ -545,7 +542,13 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         OutlinedTextField(bio,{bio=it},label={Text("Bio")},modifier=Modifier.fillMaxWidth(),maxLines=4)
                         Button(onClick={scope.launch{updateProfile()}}, modifier=Modifier.padding(top=12.dp).fillMaxWidth()){Text("Save profile")}
                         Text("Your posts: ${posts.count{it.authorId==userId}}",modifier=Modifier.padding(top=14.dp), color=Ink)
-                        TextButton(onClick={scope.launch{loadFeed(); loadNotifications(); tab="Feed"}}){Text("Refresh")}
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick={scope.launch{loadFeed()}}){Text("Refresh feed")}
+                            TextButton(onClick={scope.launch{loadNotifications(); tab="Notifications"}}){Text("Notifications")}
+                            TextButton(onClick={scope.launch{loadBlocked(); tab="Settings"}}){Text("Settings")}
+                        }
+                        TextButton(onClick={scope.launch{loadProjects(); tab="Projects"}}){Text("Projects & builds")}
+                        TextButton(onClick={scope.launch{loadCommunities(); tab="Messages"}}){Text("Messages")}
                         Spacer(Modifier.height(20.dp))
                         Text("Account", fontWeight=FontWeight.Bold, color=Ink)
                         Text("Skillect ${BuildConfig.VERSION_NAME}", color=Color.Gray, fontSize=12.sp)
@@ -555,21 +558,21 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                             onSignOut()
                         }){Text("Sign out", color=Color.Red)}
                     }
-                    "Messages" -> MessagesScreen(token ?: return@Column, userId ?: return@Column)
+                    "Messages" -> if (token != null && userId != null) MessagesScreen(token!!, userId!!) else Text("Sign in from Profile to view messages", color=Ink, modifier=Modifier.padding(20.dp))
                     "Communities" -> LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
                         item {
                             Text("Communities",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
-                            CommunityCreateForm(
+                            if (token != null) CommunityCreateForm(
                                 name = communityName,
                                 onName = { communityName = it },
                                 description = communityDesc,
                                 onDescription = { communityDesc = it },
                                 enabled = !busy,
                                 onCreate = { scope.launch { createCommunity() } }
-                            )
+                            ) else Text("Browse communities freely. Create or join one when you have a profile.", color=MutedNav, modifier=Modifier.padding(vertical=12.dp))
                             Text("Discover", fontWeight=FontWeight.Bold, color=Ink, modifier=Modifier.padding(top=8.dp, bottom=6.dp))
                         }
-                        items(communities){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp), colors=CardDefaults.cardColors(containerColor=Color(0xFF15151D))){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold,color=Ink);Text(item.detail,color=Color.Gray);Button(onClick={scope.launch{joinCommunity(item.id)}},modifier=Modifier.padding(top=6.dp)){Text("Join")}}} }
+                        items(communities){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp), colors=CardDefaults.cardColors(containerColor=Color(0xFF15151D))){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold,color=Ink);Text(item.detail,color=Color.Gray);Button(onClick={if(requireAccount()) scope.launch{joinCommunity(item.id)}},modifier=Modifier.padding(top=6.dp)){Text("Join")}}} }
                     }
                                         "Settings" -> SettingsScreen(
                         isPrivate = isPrivate,
@@ -592,7 +595,14 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                 }
             }
         }
-    }
+
+    if (showAuthPrompt) AlertDialog(
+        onDismissRequest = { showAuthPrompt = false },
+        title = { Text("Join Skillect") },
+        text = { Text("You can explore public posts and communities without an account. Create a profile or sign in to like, comment, follow, post, save, or message.") },
+        confirmButton = { TextButton(onClick = { showAuthPrompt = false; tab = "Profile" }) { Text("Go to Profile") } },
+        dismissButton = { TextButton(onClick = { showAuthPrompt = false }) { Text("Not now") } }
+    )
 
     showCommentsFor?.let { postId ->
         AlertDialog(
@@ -603,10 +613,11 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                     LazyColumn(Modifier.heightIn(max=280.dp)) {
                         items(comments){ c -> Column(Modifier.padding(vertical=5.dp)){Text(c.title,fontWeight=FontWeight.Bold);Text(c.detail)} }
                     }
-                    OutlinedTextField(commentText,{commentText=it},label={Text("Write a comment")},modifier=Modifier.fillMaxWidth())
+                    if (token != null) OutlinedTextField(commentText,{commentText=it},label={Text("Write a comment")},modifier=Modifier.fillMaxWidth())
+                    else Text("Sign in from Profile to join the conversation", color=MutedNav, modifier=Modifier.padding(top=10.dp))
                 }
             },
-            confirmButton={TextButton(onClick={scope.launch{addComment(postId)}}){Text("Send")}},
+            confirmButton={TextButton(onClick={if(requireAccount()) scope.launch{addComment(postId)}}){Text(if(token==null) "Sign in to comment" else "Send")}},
             dismissButton={TextButton(onClick={showCommentsFor=null}){Text("Close")}}
         )
     }
@@ -790,8 +801,10 @@ private suspend fun api(method:String,path:String,token:String?,json:JSONObject?
     }
 }
 
-private suspend fun apiArray(path:String,token:String):JSONArray = withContext(Dispatchers.IO) {
-    val request=Request.Builder().url(URL+path).addHeader("apikey",KEY).addHeader("Authorization","Bearer $token").build()
+private suspend fun apiArray(path:String,token:String?):JSONArray = withContext(Dispatchers.IO) {
+    val builder = Request.Builder().url(URL+path).addHeader("apikey",KEY)
+    if (token != null) builder.addHeader("Authorization","Bearer $token")
+    val request = builder.build()
     client.newCall(request).execute().use { response ->
         val text=response.body?.string().orEmpty()
         if(!response.isSuccessful) throw IllegalStateException("Request failed (${response.code}): $text")
