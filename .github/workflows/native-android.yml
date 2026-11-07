@@ -10,7 +10,7 @@ on:
         options:
           - debug
           - signed-release
-        default: debug
+        default: signed-release
   pull_request:
     branches:
       - main
@@ -28,7 +28,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   android-build:
@@ -38,16 +38,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore MainActivity if stubbed
+      - name: Restore and feature-patch MainActivity
         run: |
+          set -euo pipefail
           TARGET="native/android/app/src/main/java/com/skillect/app/MainActivity.kt"
-          BYTES=$(wc -c < "$TARGET" || echo 0)
-          echo "MainActivity size=$BYTES"
-          if [ "$BYTES" -lt 5000 ]; then
-            echo "Restoring MainActivity from known-good commit"
-            curl -fsSL -o "$TARGET" \
-              "https://raw.githubusercontent.com/sd9282726-rgb/Skillectt/f88c8f0617db8d3188ebf9a66f6e9e0f4ca16e7c/native/android/app/src/main/java/com/skillect/app/MainActivity.kt"
-            wc -c "$TARGET"
+          echo "Restoring MainActivity from known-good commit"
+          curl -fsSL -o "$TARGET" \
+            "https://raw.githubusercontent.com/sd9282726-rgb/Skillectt/f88c8f0617db8d3188ebf9a66f6e9e0f4ca16e7c/native/android/app/src/main/java/com/skillect/app/MainActivity.kt"
+          python3 native/android/scripts/apply_features.py "$TARGET"
+          wc -c "$TARGET"
+          grep -n "AuthGate\|OnboardingGate\|CommunityCreateForm\|createCommunity" "$TARGET" | head
+
+      - name: Commit restored MainActivity to main
+        if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add native/android/app/src/main/java/com/skillect/app/MainActivity.kt
+          if git diff --cached --quiet; then
+            echo "No MainActivity changes to commit"
+          else
+            git commit -m "Restore MainActivity with signup, DOB onboarding, community create"
+            git push
           fi
 
       - name: Set up JDK 17
