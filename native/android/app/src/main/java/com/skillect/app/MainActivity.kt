@@ -440,7 +440,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     suspend fun loadFeed() {
         val active = token ?: return
         try {
-            val arr = apiArray("/rest/v1/posts?select=id,author_id,content,image_url,media_type,likes_count,comments_count,profiles(display_name,username)&order=created_at.desc&limit=50", active)
+            val arr = apiArray("/rest/v1/posts?select=id,author_id,content,image_url,media_type,likes_count,comments_count,profiles(display_name,username)&moderation_hidden=eq.false&order=created_at.desc&limit=50", active)
             posts = (0 until arr.length()).map { i ->
                 val p = arr.getJSONObject(i); val profile = p.optJSONObject("profiles") ?: JSONObject()
                 Post(p.optString("id"), p.optString("author_id"), p.optString("content"), profile.optString("display_name", "Skillect member"), profile.optString("username", "member"), p.optString("image_url").takeIf { it.isNotBlank() }, p.optString("media_type", "text"), p.optInt("likes_count"), p.optInt("comments_count"))
@@ -671,14 +671,24 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
 
     suspend fun createPost() {
         val active=token ?: return
+        val me=userId ?: return
         if(createText.isBlank() && selectedMediaUri==null) return
         busy=true
         successMessage=null
         try {
             val selected=selectedMediaUri
             if(selected!=null) {
-                submitVideoPost(context,selected,active,userId ?: return,createText.trim())
-                successMessage="Video submitted for moderator review. It will appear in the feed after approval."
+                val mime=context.contentResolver.getType(selected) ?: error("Could not identify selected media")
+                if(mime.startsWith("video/")) {
+                    submitVideoPost(context,selected,active,me,createText.trim())
+                    successMessage="Post published. Video safety screening is running in the background."
+                } else if(mime.startsWith("image/")) {
+                    val publicUrl=publishImagePost(context,selected,active,me)
+                    api("POST","/rest/v1/posts",active,JSONObject().put("author_id",me).put("content",createText.trim()).put("image_url",publicUrl).put("media_type","image").put("tags",JSONArray()))
+                    successMessage="Photo post published after its automatic safety check."
+                } else error("Choose an image or video file")
+                tab="Feed"
+                loadFeed()
             } else {
                 val body=JSONObject().put("type","post").put("content",createText.trim()).put("tags",JSONArray())
                 api("POST","/functions/v1/moderate-text",active,body)
@@ -1111,6 +1121,26 @@ private suspend fun submitVideoPost(context:Context, uri:Uri, token:String, user
         if(!response.isSuccessful) throw IllegalStateException("Private video upload failed (${response.code})")
     }
     api("POST","/functions/v1/submit-video-post",token,JSONObject().put("storage_path",path).put("content",caption))
+}
+
+private suspend fun publishImagePost(context:Context, uri:Uri, token:String, userId:String):String = withContext(Dispatchers.IO) {
+    val mime=context.contentResolver.getType(uri) ?: "image/jpeg"
+    require(mime in setOf("image/jpeg","image/png","image/webp","image/heic","image/heif")) { "Choose a JPEG, PNG, WebP or HEIC image" }
+    val bytes=context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: error("Could not read selected image")
+    require(bytes.isNotEmpty() && bytes.size <= 12 * 1024 * 1024) { "Image must be 12 MB or smaller" }
+    val fileName="upload."+when(mime) { "image/jpeg" -> "jpg"; "image/heic" -> "heic"; "image/heif" -> "heif"; else -> mime.substringAfter("/") }
+    val multipart=MultipartBody.Builder().setType(MultipartBody.FORM)
+        .addFormDataPart("file",fileName,bytes.toRequestBody(mime.toMediaType()))
+        .build()
+    val request=Request.Builder().url("$URL/functions/v1/moderate-media")
+        .addHeader("apikey",KEY).addHeader("Authorization","Bearer $token")
+        .post(multipart).build()
+    client.newCall(request).execute().use { response ->
+        val text=response.body?.string().orEmpty()
+        if(!response.isSuccessful) throw IllegalStateException(try { JSONObject(text).optString("error","Image safety check failed") } catch(_:Exception) { "Image safety check failed (${response.code})" })
+        val result=JSONObject(text)
+        result.optString("public_url").takeIf { it.startsWith("https://") } ?: error("Image safety check returned no public URL")
+    }
 }
 
 private suspend fun uploadPostMedia(context:Context, uri:Uri, token:String, userId:String):String = withContext(Dispatchers.IO) {
