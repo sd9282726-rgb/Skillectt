@@ -120,14 +120,27 @@ export default function Profile() {
       link: cleanLink || null,
       status: projectStatus,
     };
-    const result = editingProject
-      ? await supabase.from("projects").update(payload).eq("id", editingProject.id).eq("author_id", profile.id).select("id,title,description,link,status,created_at").single()
-      : await supabase.from("projects").insert({ ...payload, author_id: profile.id }).select("id,title,description,link,status,created_at").single();
+    const { data: moderation, error: moderationError } = await supabase.functions.invoke("moderate-text", {
+      body: { type: "project", ...payload, ...(editingProject ? { project_id: editingProject.id } : {}) },
+    });
 
-    if (result.error || !result.data) {
-      setProjectError(result.error?.message || "Could not save this project.");
+    if (moderationError || moderation?.status !== "approved" || !moderation?.id) {
+      setProjectError(moderationError?.message || moderation?.error || "This project did not pass Skillect's safety check.");
+      setProjectSaving(false);
+      return;
+    }
+
+    const { data: savedProject, error: loadError } = await supabase
+      .from("projects")
+      .select("id,title,description,link,status,created_at")
+      .eq("id", moderation.id)
+      .eq("author_id", profile.id)
+      .single();
+
+    if (loadError || !savedProject) {
+      setProjectError(loadError?.message || "Project passed screening but could not be loaded.");
     } else {
-      const saved = result.data as Project;
+      const saved = savedProject as Project;
       setProjects((current) => editingProject
         ? current.map((project) => project.id === saved.id ? saved : project)
         : [saved, ...current]);
