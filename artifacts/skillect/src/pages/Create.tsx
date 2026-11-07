@@ -106,11 +106,6 @@ export default function Create() {
         }
         postId = data.id;
       } else {
-        const { error: captionError } = await supabase.functions.invoke("moderate-text", {
-          body: { type: "media_caption", content: content.trim() },
-        });
-        if (captionError) throw new Error(captionError.message || "Caption safety screening failed.");
-
         if (file.type.startsWith("image/")) {
           const form = new FormData();
           form.append("file", file, file.name);
