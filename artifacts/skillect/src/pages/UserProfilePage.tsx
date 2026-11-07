@@ -28,12 +28,23 @@ interface PostRow {
   author_id: string;
 }
 
+interface Project {
+  id: string;
+  title: string;
+  description: string;
+  link: string | null;
+  status: string;
+  created_at: string;
+}
+
 export default function UserProfilePage({ id }: { id: string }) {
   const { currentUserId } = useApp();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [posts, setPosts] = useState<PostRow[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [tab, setTab] = useState<"posts" | "projects">("posts");
   const [isFollowing, setIsFollowing] = useState(false);
   const [followerCount, setFollowerCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
@@ -51,7 +62,7 @@ export default function UserProfilePage({ id }: { id: string }) {
     const load = async () => {
       setLoading(true);
 
-      const [profileRes, postsRes, followersRes, followingRes] = await Promise.all([
+      const [profileRes, postsRes, followersRes, followingRes, projectsRes] = await Promise.all([
         supabase.from("profiles").select("id,display_name,username,avatar_url,bio,location,skills,is_private").eq("id", id).single(),
         supabase
           .from("posts")
@@ -66,10 +77,16 @@ export default function UserProfilePage({ id }: { id: string }) {
           .from("follows")
           .select("id", { count: "exact", head: true })
           .eq("follower_id", id),
+        supabase
+          .from("projects")
+          .select("id,title,description,link,status,created_at")
+          .eq("author_id", id)
+          .order("created_at", { ascending: false }),
       ]);
 
       if (profileRes.data) setProfile(profileRes.data as Profile);
       if (postsRes.data) setPosts(postsRes.data as PostRow[]);
+      if (projectsRes.data) setProjects(projectsRes.data as Project[]);
       setFollowerCount(followersRes.count ?? 0);
       setFollowingCount(followingRes.count ?? 0);
 
@@ -252,36 +269,48 @@ export default function UserProfilePage({ id }: { id: string }) {
         </div>
       </div>
 
-      <div className="border-b border-gray-200">
-        <div className="flex-1 py-3 text-center text-sm font-semibold text-blue-600 border-b-2 border-blue-600">
-          Posts
-        </div>
+      <div className="flex border-b border-gray-200">
+        <button type="button" onClick={() => setTab("posts")} className={`flex-1 py-3 text-sm font-semibold ${tab === "posts" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-500"}`}>Posts</button>
+        <button type="button" onClick={() => setTab("projects")} className={`flex-1 py-3 text-sm font-semibold ${tab === "projects" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-500"}`}>Projects</button>
       </div>
 
-      {posts.length > 0 ? (
-        posts.map((post) => (
-          <PostCard
-            key={post.id}
-            post={{
-              id: post.id,
-              content: post.content,
-              image: post.image_url ?? undefined,
-              mediaType: post.media_type ?? "text",
-              tags: post.tags ?? [],
-              likesCount: post.likes_count,
-              commentsCount: post.comments_count,
-              createdAt: post.created_at,
-              author: {
-                id: profile.id,
-                name: profile.display_name,
-                username: profile.username,
-                avatar: profile.avatar_url || "",
-              },
-            }}
-          />
-        ))
+      {tab === "posts" ? (
+        posts.length > 0 ? (
+          posts.map((post) => (
+            <PostCard
+              key={post.id}
+              post={{
+                id: post.id,
+                content: post.content,
+                image: post.image_url ?? undefined,
+                mediaType: post.media_type ?? "text",
+                tags: post.tags ?? [],
+                likesCount: post.likes_count,
+                commentsCount: post.comments_count,
+                createdAt: post.created_at,
+                author: {
+                  id: profile.id,
+                  name: profile.display_name,
+                  username: profile.username,
+                  avatar: profile.avatar_url || "",
+                },
+              }}
+            />
+          ))
+        ) : (
+          <p className="py-12 text-center text-sm text-gray-500">No posts yet.</p>
+        )
       ) : (
-        <p className="text-center text-sm text-gray-500 py-12">No posts yet.</p>
+        <div className="space-y-3 px-4 py-5 md:px-6">
+          {projects.length > 0 ? projects.map((project) => (
+            <article key={project.id} className="rounded-xl border border-gray-200 p-4">
+              <h2 className="text-sm font-semibold text-gray-900">{project.title}</h2>
+              <span className="mt-1 inline-block rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-semibold capitalize text-blue-700">{project.status.replace(/_/g, " ")}</span>
+              {project.description && <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-gray-600">{project.description}</p>}
+              {project.link && <a href={project.link} target="_blank" rel="noreferrer" className="mt-3 inline-block break-all text-xs font-semibold text-blue-600 hover:underline">{project.link}</a>}
+            </article>
+          )) : <p className="py-12 text-center text-sm text-gray-500">No projects shared yet.</p>}
+        </div>
       )}
     </div>
   );
