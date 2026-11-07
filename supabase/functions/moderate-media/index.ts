@@ -21,6 +21,14 @@ Deno.serve(async (request: Request) => {
   try { form = await request.formData(); } catch { return json(400, { error: "Expected multipart form data" }); }
   const file = form.get("file"), caption = String(form.get("content") ?? "").trim();
   if (!(file instanceof File)) return json(400, { error: "A file field is required" });
+  let tags: string[] = [];
+  try {
+    const parsed = JSON.parse(String(form.get("tags") || "[]"));
+    if (!Array.isArray(parsed)) return json(400, { error: "Tags must be a list" });
+    tags = parsed.map((item) => String(item).trim().replace(/^#/, "").slice(0, 30)).filter(Boolean).slice(0, 10);
+  } catch { return json(400, { error: "Invalid tags" }); }
+  const category = String(form.get("category") || "").trim().slice(0, 64);
+  const textForScreening = [caption, category, ...tags].filter(Boolean).join("\n");
   const allowed = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
   if (!allowed.has(file.type)) return json(415, { error: "Unsupported image type" });
   if (file.size < 1 || file.size > 12 * 1024 * 1024 || caption.length > 5000) return json(413, { error: "Image must be 12 MB or smaller and caption no longer than 5,000 characters" });
@@ -28,7 +36,7 @@ Deno.serve(async (request: Request) => {
   const captionCheck = await fetch(base + "/functions/v1/moderate-text", {
     method: "POST",
     headers: { apikey: anon, Authorization: authorization, "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "media_caption", content: caption }),
+    body: JSON.stringify({ type: "media_caption", content: textForScreening }),
   });
   const captionDecision = captionCheck.ok ? await captionCheck.json() : null;
   if (!captionCheck.ok || captionDecision?.status !== "approved") {
@@ -56,7 +64,7 @@ Deno.serve(async (request: Request) => {
 
   const postResponse = await fetch(base + "/rest/v1/posts?select=id", {
     method: "POST", headers: { ...adminHeaders(service), "Content-Type": "application/json", Prefer: "return=representation" },
-    body: JSON.stringify({ author_id: userId, content: caption, image_url: publicUrl, media_type: "image", tags: [], moderation_hidden: true }),
+    body: JSON.stringify({ author_id: userId, content: caption, image_url: publicUrl, media_type: "image", tags, ...(category ? { category } : {}), moderation_hidden: true }),
   });
   const postRows = postResponse.ok ? await postResponse.json() : [];
   if (!postResponse.ok || !postRows[0]?.id) {
