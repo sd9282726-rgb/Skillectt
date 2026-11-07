@@ -56,7 +56,7 @@ jobs:
         working-directory: native/android
         run: gradle --no-daemon :app:assembleDebug
       - name: Upload debug APK
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_type == 'debug' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type == 'debug' }}
         uses: actions/upload-artifact@v4
         with:
           name: skillect-native-android-debug
@@ -76,14 +76,14 @@ jobs:
           test -n "$KEY_ALIAS" || (echo "Missing KEY_ALIAS" && exit 1)
           test -n "$KEY_PASSWORD" || (echo "Missing KEY_PASSWORD" && exit 1)
       - name: Restore upload keystore
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type == 'signed-release' }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_type == 'signed-release' }}
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/skillect-upload.jks"
           echo "KEYSTORE_PATH=$RUNNER_TEMP/skillect-upload.jks" >> "$GITHUB_ENV"
       - name: Build signed release APK and AAB
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type == 'signed-release' }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_type == 'signed-release' }}
         working-directory: native/android
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -91,7 +91,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: gradle --no-daemon :app:assembleRelease :app:bundleRelease
       - name: Upload signed release packages
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type == 'signed-release' }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_type == 'signed-release' }}
         uses: actions/upload-artifact@v4
         with:
           name: skillect-native-android-signed-release
