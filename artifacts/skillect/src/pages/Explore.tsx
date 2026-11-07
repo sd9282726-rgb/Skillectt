@@ -21,25 +21,36 @@ export default function Explore() {
   const [query, setQuery] = useState("");
   const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
 
-      let q = supabase
+      setError(null);
+      const { data, error: peopleError } = await supabase
         .from("profiles")
         .select("id, display_name, username, avatar_url, location, skills")
         .order("created_at", { ascending: false })
-        .limit(50);
+        .limit(100);
 
-      if (query.trim()) {
-        q = q.or(
-          `display_name.ilike.%${query.trim()}%,username.ilike.%${query.trim()}%`
-        );
+      if (peopleError) {
+        setError(peopleError.message);
+        setPeople([]);
+        setLoading(false);
+        return;
       }
 
-      const { data } = await q;
-      let list = (data || []).filter((p) => p.id !== currentUserId) as Person[];
+      const term = query.trim().toLowerCase();
+      let list = ((data || []) as Person[]).filter((person) => {
+        if (person.id === currentUserId) return false;
+        if (!term) return true;
+        return (
+          person.display_name.toLowerCase().includes(term) ||
+          person.username.toLowerCase().includes(term) ||
+          (person.skills || []).some((skill) => skill.toLowerCase().includes(term))
+        );
+      });
 
       if (user && list.length > 0) {
         const ids = list.map((p) => p.id);
@@ -64,17 +75,13 @@ export default function Explore() {
   const toggleFollow = async (id: string, isFollowing: boolean) => {
     if (!user) return;
 
-    if (isFollowing) {
-      await supabase
-        .from("follows")
-        .delete()
-        .eq("follower_id", user.id)
-        .eq("following_id", id);
-    } else {
-      await supabase.from("follows").insert({
-        follower_id: user.id,
-        following_id: id,
-      });
+    const result = isFollowing
+      ? await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", id)
+      : await supabase.from("follows").insert({ follower_id: user.id, following_id: id });
+
+    if (result.error) {
+      setError(result.error.message);
+      return;
     }
 
     setPeople((prev) =>
@@ -94,6 +101,8 @@ export default function Explore() {
           className="w-full rounded-full bg-gray-50 border border-gray-200 pl-10 pr-4 py-2.5 text-sm outline-none focus:border-blue-500"
         />
       </div>
+
+      {error && <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
       {loading ? (
         <div className="flex justify-center py-10">
