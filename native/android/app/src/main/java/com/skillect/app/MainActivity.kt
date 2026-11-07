@@ -507,7 +507,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         if(posts.isEmpty()) {
                             Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement=Arrangement.Center) {
                                 Text("Your feed is ready", color=Ink, fontSize=20.sp, fontWeight=FontWeight.Bold)
-                                Text("Follow people, join communities, or create your first skill update.", color=Color.Gray, modifier=Modifier.padding(top=8.dp))
+                                Text("Follow people, join communities, or create your first skill update.", color=MutedNav, modifier=Modifier.padding(top=8.dp))
                                 Button(onClick={if(requireAccount()) tab="Create"}, modifier=Modifier.padding(top=16.dp)){Text("Create a post")}
                             }
                         }
@@ -618,7 +618,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         OutlinedTextField(projectTitle,{projectTitle=it},label={Text("Project title")},modifier=Modifier.fillMaxWidth())
                         OutlinedTextField(projectDescription,{projectDescription=it},label={Text("What are you building?")},modifier=Modifier.fillMaxWidth(),maxLines=4)
                         Button(onClick={scope.launch{createProject()}},enabled=projectTitle.isNotBlank()&&projectDescription.isNotBlank()){Text("Add project")}
-                        LazyColumn { items(projects){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray)}} } }
+                        LazyColumn { items(projects){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=MutedNav)}} } }
                         TextButton(onClick={scope.launch{loadCommunities();tab="Communities"}}){Text("Explore communities")}
                     }
                     "Profile" -> if (token == null) {
@@ -636,7 +636,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         )
                     } else Column(Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState())) {
                         Text(displayName.ifBlank{"Your profile"},fontSize=25.sp,fontWeight=FontWeight.Bold,color=Ink)
-                        Text("@$username",color=Color.Gray)
+                        Text("@$username",color=MutedNav)
                         OutlinedTextField(displayName,{displayName=it},label={Text("Display name")},modifier=Modifier.fillMaxWidth())
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(bio,{bio=it},label={Text("Bio")},modifier=Modifier.fillMaxWidth(),maxLines=4)
@@ -651,7 +651,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         TextButton(onClick={scope.launch{loadCommunities(); tab="Messages"}}){Text("Messages")}
                         Spacer(Modifier.height(20.dp))
                         Text("Account", fontWeight=FontWeight.Bold, color=Ink)
-                        Text("Skillect ${BuildConfig.VERSION_NAME}", color=Color.Gray, fontSize=12.sp)
+                        Text("Skillect ${BuildConfig.VERSION_NAME}", color=MutedNav, fontSize=12.sp)
                         TextButton(onClick={
                             token = null
                             userId = null
@@ -683,7 +683,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                             ) else Text("Browse communities freely. Create or join one when you have a profile.", color=MutedNav, modifier=Modifier.padding(vertical=12.dp))
                             Text("Discover", fontWeight=FontWeight.Bold, color=Ink, modifier=Modifier.padding(top=8.dp, bottom=6.dp))
                         }
-                        items(communities){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp), colors=CardDefaults.cardColors(containerColor=NavySurface)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold,color=Ink);Text(item.detail,color=Color.Gray);Button(onClick={if(requireAccount()) scope.launch{joinCommunity(item.id)}},modifier=Modifier.padding(top=6.dp)){Text("Join")}}} }
+                        items(communities){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp), colors=CardDefaults.cardColors(containerColor=NavySurface)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold,color=Ink);Text(item.detail,color=MutedNav);Button(onClick={if(requireAccount()) scope.launch{joinCommunity(item.id)}},modifier=Modifier.padding(top=6.dp)){Text("Join")}}} }
                     }
                                         "Settings" -> SettingsScreen(
                         isPrivate = isPrivate,
@@ -712,7 +712,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                     "Notifications" -> LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
                         item { Text("Notifications",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink) }
                         item { TextButton(onClick={scope.launch{loadNotifications()}}){Text("Refresh")} }
-                        items(notifications){ item -> Card(Modifier.fillMaxWidth().padding(vertical=5.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);TextButton(onClick={scope.launch{markNotificationRead(item.id)}}){Text("Mark read")}}} }
+                        items(notifications){ item -> Card(Modifier.fillMaxWidth().padding(vertical=5.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=MutedNav);TextButton(onClick={scope.launch{markNotificationRead(item.id)}}){Text("Mark read")}}} }
                     }
                 }
             }
@@ -875,7 +875,7 @@ private fun MessagesScreen(token: String, userId: String) {
             if (loading) CircularProgressIndicator()
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(conversations, key = { it.id }) { item ->
-                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF15151D)), modifier = Modifier.fillMaxWidth()) {
+                    Card(colors = CardDefaults.cardColors(containerColor = NavySurface), modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.fillMaxWidth().clickable { scope.launch { openConversation(item.id, item.title) } }.padding(14.dp)) {
                             Text(item.title, color = Ink, fontWeight = FontWeight.Bold)
                             Text(item.detail, color = Color.LightGray, maxLines = 1)
