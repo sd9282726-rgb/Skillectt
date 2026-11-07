@@ -41,6 +41,7 @@ export default function PostDetail({ id }: { id: string }) {
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -116,24 +117,27 @@ export default function PostDetail({ id }: { id: string }) {
     if (!comment.trim() || !user || !post) return;
     setSubmitting(true);
 
-    const { data, error } = await supabase
-      .from("comments")
-      .insert({
-        post_id: post.id,
-        author_id: user.id,
-        content: comment.trim(),
-      })
-      .select(
-        `
-        *,
-        profiles:author_id (id, display_name, username, avatar_url)
-      `
-      )
-      .single();
+    setActionError(null);
+    const { data, error } = await supabase.functions.invoke("moderate-text", {
+      body: { type: "comment", post_id: post.id, content: comment.trim() },
+    });
 
-    if (!error && data) {
-      setComments((prev) => [...prev, data as unknown as Comment]);
-      setComment("");
+    if (error) {
+      setActionError(error.message || "Comment could not be sent.");
+    } else if (data?.status === "approved" && data?.id) {
+      const { data: savedComment, error: readError } = await supabase
+        .from("comments")
+        .select(`*, profiles:author_id (id, display_name, username, avatar_url)`)
+        .eq("id", data.id)
+        .single();
+      if (readError || !savedComment) {
+        setActionError("Your comment passed the safety check but could not be loaded. Refresh to see it.");
+      } else {
+        setComments((prev) => [...prev, savedComment as unknown as Comment]);
+        setComment("");
+      }
+    } else {
+      setActionError(data?.error || "Comment did not pass Skillect's safety check.");
     }
 
     setSubmitting(false);
@@ -258,6 +262,7 @@ export default function PostDetail({ id }: { id: string }) {
           )}
         </div>
 
+        {actionError && <p role="alert" className="mt-3 text-xs text-red-600">{actionError}</p>}
         {user && (
           <div className="flex gap-2 mt-5">
             <input
