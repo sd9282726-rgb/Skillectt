@@ -60,7 +60,7 @@ export default function Shell({ children }: { children: ReactNode }) {
           <span className="text-xl font-bold tracking-tight text-blue-600">Skillect</span>
         </div>
         <nav className="flex-1 px-3 space-y-1">
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.filter((item) => item.href !== "/notifications").map((item) => {
             const active =
               item.href === "/" ? location === "/" : location.startsWith(item.href);
             const Icon = item.icon;
@@ -110,6 +110,10 @@ export default function Shell({ children }: { children: ReactNode }) {
             S
           </div>
           <span className="text-lg font-bold text-blue-600">Skillect</span>
+          <Link href="/notifications" aria-label="Notifications" className="relative ml-auto rounded-full p-2 text-gray-600 hover:bg-gray-100">
+            <Bell className="h-5 w-5" />
+            {unreadCount > 0 && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-blue-600" />}
+          </Link>
         </header>
 
         <main className="flex-1 w-full pb-20 md:pb-0">{children}</main>
@@ -128,12 +132,7 @@ export default function Shell({ children }: { children: ReactNode }) {
                 active ? "text-blue-600" : "text-gray-500"
               }`}
             >
-              <span className="relative">
-                <Icon className="h-5 w-5" />
-                {item.href === "/notifications" && unreadCount > 0 && (
-                  <span className="absolute -right-2 -top-1 h-2 w-2 rounded-full bg-blue-600" />
-                )}
-              </span>
+              <Icon className="h-5 w-5" />
               {item.label}
             </Link>
           );
