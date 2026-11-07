@@ -34,6 +34,11 @@ Deno.serve(async (request: Request) => {
   try { input = await request.json(); } catch { return json(400, { error: "Expected JSON body" }); }
   const storagePath = input.storage_path;
   const caption = String(input.content ?? "").trim();
+  const tags = Array.isArray(input.tags)
+    ? input.tags.map((item: unknown) => String(item).trim().replace(/^#/, "").slice(0, 30)).filter(Boolean).slice(0, 10)
+    : [];
+  const category = String(input.category || "").trim().slice(0, 64);
+  const textForScreening = [caption, category, ...tags].filter(Boolean).join("\n");
   if (typeof storagePath !== "string" || !storagePath.startsWith(userId + "/") || storagePath.includes("..")) return json(400, { error: "Invalid video storage path" });
   const extension = storagePath.split(".").pop()?.toLowerCase();
   const mimeByExt: Record<string, string> = { mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime" };
@@ -42,7 +47,7 @@ Deno.serve(async (request: Request) => {
   const captionCheck = await fetch(base + "/functions/v1/moderate-text", {
     method: "POST",
     headers: { apikey: anon, Authorization: authorization, "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "media_caption", content: caption }),
+    body: JSON.stringify({ type: "media_caption", content: textForScreening }),
   });
   const captionDecision = captionCheck.ok ? await captionCheck.json() : null;
   if (!captionCheck.ok || captionDecision?.status !== "approved") {
@@ -77,7 +82,7 @@ Deno.serve(async (request: Request) => {
   const postResponse = await fetch(base + "/rest/v1/posts?select=id", {
     method: "POST",
     headers: { ...adminHeaders(service), "Content-Type": "application/json", Prefer: "return=representation" },
-    body: JSON.stringify({ author_id: userId, content: caption, image_url: publicUrl, media_type: "video", tags: [], moderation_hidden: true }),
+    body: JSON.stringify({ author_id: userId, content: caption, image_url: publicUrl, media_type: "video", tags, ...(category ? { category } : {}), moderation_hidden: true }),
   });
   const postRows = postResponse.ok ? await postResponse.json() : [];
   if (!postResponse.ok || !postRows[0]?.id) {
