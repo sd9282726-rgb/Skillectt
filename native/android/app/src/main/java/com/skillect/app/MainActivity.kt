@@ -52,6 +52,20 @@ private const val KEY = BuildConfig.SUPABASE_KEY
 data class Post(val id: String, val authorId: String, val body: String, val author: String, val handle: String, val image: String?, val mediaUrl: String?, val mediaType: String, val likes: Int, val comments: Int)
 data class SimpleItem(val id: String, val title: String, val detail: String)
 
+private fun postFromJson(p: JSONObject): Post {
+    val profile = p.optJSONObject("profiles") ?: JSONObject()
+    val mediaType = p.optString("media_type", "text")
+    val mediaUrl = p.optString("image_url").takeIf { it.isNotBlank() }
+    return Post(
+        p.optString("id"), p.optString("author_id"), p.optString("content"),
+        profile.optString("display_name", "Skillect member"), profile.optString("username", "member"),
+        if (mediaType == "video") null else mediaUrl,
+        mediaUrl,
+        mediaType,
+        p.optInt("likes_count"), p.optInt("comments_count")
+    )
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -137,10 +151,10 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
 
     suspend fun loadFeed() {
         try {
-            val arr = apiArray("/rest/v1/posts?select=id,author_id,content,image_url,media_type,likes_count,comments_count,profiles(display_name,username),media_assets(public_url,media_type,status)&moderation_hidden=eq.false&order=created_at.desc&limit=50", token)
+            val arr = apiArray("/rest/v1/posts?select=id,author_id,content,image_url,media_type,likes_count,comments_count,profiles(display_name,username)&moderation_hidden=eq.false&order=created_at.desc&limit=50", token)
             posts = (0 until arr.length()).map { i ->
-                val p = arr.getJSONObject(i); val profile = p.optJSONObject("profiles") ?: JSONObject()
-                Post(p.optString("id"), p.optString("author_id"), p.optString("content"), profile.optString("display_name", "Skillect member"), profile.optString("username", "member"), p.optString("image_url").takeIf { it.isNotBlank() }, p.optJSONArray("media_assets")?.let { assets -> (0 until assets.length()).map { assets.getJSONObject(it) }.firstOrNull { it.optString("status") == "approved" }?.optString("public_url")?.takeIf { it.isNotBlank() } }, p.optString("media_type", "text"), p.optInt("likes_count"), p.optInt("comments_count"))
+                val p = arr.getJSONObject(i)
+                postFromJson(p)
             }
             val me = userId
             if (me != null) {
@@ -647,7 +661,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                             ) else Text("Browse communities freely. Create or join one when you have a profile.", color=MutedNav, modifier=Modifier.padding(vertical=12.dp))
                             Text("Discover", fontWeight=FontWeight.Bold, color=Ink, modifier=Modifier.padding(top=8.dp, bottom=6.dp))
                         }
-                        items(communities){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp), colors=CardDefaults.cardColors(containerColor=Color(0xFF15151D))){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold,color=Ink);Text(item.detail,color=Color.Gray);Button(onClick={if(requireAccount()) scope.launch{joinCommunity(item.id)}},modifier=Modifier.padding(top=6.dp)){Text("Join")}}} }
+                        items(communities){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp), colors=CardDefaults.cardColors(containerColor=NavySurface)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold,color=Ink);Text(item.detail,color=Color.Gray);Button(onClick={if(requireAccount()) scope.launch{joinCommunity(item.id)}},modifier=Modifier.padding(top=6.dp)){Text("Join")}}} }
                     }
                                         "Settings" -> SettingsScreen(
                         isPrivate = isPrivate,
@@ -840,7 +854,7 @@ private fun MessagesScreen(token: String, userId: String) {
             LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(messages, key = { it.id }) { item ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (item.title == "You") Arrangement.End else Arrangement.Start) {
-                        Surface(color = if (item.title == "You") Color(0xFF1A4168) else Color(0xFF20202A), shape = RoundedCornerShape(16.dp)) {
+                        Surface(color = if (item.title == "You") Color(0xFF1A4168) else NavySurface, shape = RoundedCornerShape(16.dp)) {
                             Column(Modifier.widthIn(max = 280.dp).padding(12.dp)) {
                                 Text(item.title, color = Blue, fontSize = 11.sp)
                                 Text(item.detail, color = Ink)
