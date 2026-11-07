@@ -12,6 +12,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -89,6 +91,8 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     var createText by remember { mutableStateOf("") }
     var searchText by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
+    var selectedPerson by remember { mutableStateOf<SimpleItem?>(null) }
+    var selectedPersonPosts by remember { mutableStateOf<List<Post>>(emptyList()) }
     var projects by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
     var communities by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
     var displayName by remember { mutableStateOf("") }
@@ -335,6 +339,16 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         } catch(e:Exception){ error=e.message }
     }
 
+    suspend fun loadPersonPosts(personId: String) {
+        try {
+            val arr = apiArray("/rest/v1/posts?select=id,author_id,content,image_url,media_type,likes_count,comments_count,profiles(display_name,username),media_assets(public_url,media_type,status)&author_id=eq.$personId&moderation_hidden=eq.false&order=created_at.desc&limit=30", token)
+            selectedPersonPosts = (0 until arr.length()).map { i ->
+                val p = arr.getJSONObject(i); val profile = p.optJSONObject("profiles") ?: JSONObject()
+                Post(p.optString("id"), p.optString("author_id"), p.optString("content"), profile.optString("display_name", "Skillect member"), profile.optString("username", "member"), p.optString("image_url").takeIf { it.isNotBlank() }, p.optJSONArray("media_assets")?.let { assets -> (0 until assets.length()).map { assets.getJSONObject(it) }.firstOrNull { it.optString("status") == "approved" }?.optString("public_url")?.takeIf { it.isNotBlank() } }, p.optString("media_type", "text"), p.optInt("likes_count"), p.optInt("comments_count"))
+            }
+        } catch (e: Exception) { error = e.message }
+    }
+
     suspend fun searchPeople() {
         if (searchText.isBlank()) { results=emptyList(); return }
         try {
@@ -508,11 +522,55 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                             }
                         }
                     }
-                    "Explore" -> Column(Modifier.fillMaxSize().padding(16.dp)) {
-                        Text("Find your people",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
-                        OutlinedTextField(searchText,{searchText=it},label={Text("Search by name or username")},modifier=Modifier.fillMaxWidth())
-                        Button(onClick={scope.launch{searchPeople()}},modifier=Modifier.padding(top=8.dp)){Text("Search")}
-                        LazyColumn { items(results){ item -> Card(Modifier.fillMaxWidth().padding(vertical=5.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);TextButton(onClick={if(requireAccount()) scope.launch{followUser(item.id)}}){Text("Follow")}; TextButton(onClick={if(requireAccount()) scope.launch{blockUser(item.id)}}){Text("Block")}}} } }
+                    "Explore" -> if (selectedPerson != null) {
+                        val person = selectedPerson!!
+                        Column(Modifier.fillMaxSize().padding(16.dp)) {
+                            TextButton(onClick = { selectedPerson = null; selectedPersonPosts = emptyList() }) { Text("← Back to Explore") }
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+                                Surface(modifier = Modifier.size(64.dp), shape = CircleShape, color = NavyRaised) {
+                                    Box(contentAlignment = Alignment.Center) { Text(person.title.take(1).uppercase(), color = Blue, fontWeight = FontWeight.Bold, fontSize = 24.sp) }
+                                }
+                                Column(Modifier.padding(start = 14.dp).weight(1f)) {
+                                    Text(person.title.substringBefore("  @"), color = Ink, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                                    Text(person.title.substringAfter("  ", ""), color = MutedNav, fontSize = 13.sp)
+                                }
+                            }
+                            Text(person.detail.ifBlank { "Building and sharing on Skillect." }, color = MutedNav, modifier = Modifier.padding(vertical = 8.dp))
+                            Button(onClick = { if (requireAccount()) scope.launch { followUser(person.id) } }, modifier = Modifier.fillMaxWidth()) { Text("Follow") }
+                            Text("Posts", color = Ink, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+                            if (selectedPersonPosts.isEmpty()) Text("No public posts yet", color = MutedNav)
+                            else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                items(selectedPersonPosts, key = { it.id }) { post ->
+                                    Card(colors = CardDefaults.cardColors(containerColor = NavySurface), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+                                        Column(Modifier.padding(16.dp)) {
+                                            Text(post.body, color = Ink, lineHeight = 22.sp)
+                                            post.mediaUrl?.let { media -> if (post.mediaType == "video") AndroidView(factory = { ctx -> VideoView(ctx).apply { setVideoURI(Uri.parse(media)); setOnPreparedListener { it.isLooping = false; start() } } }, modifier = Modifier.fillMaxWidth().height(220.dp).padding(top = 10.dp)) else AsyncImage(model = media, contentDescription = "Post image", modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp).padding(top = 10.dp)) }
+                                            Text(post.likes.toString() + " likes  ·  " + post.comments + " comments", color = MutedNav, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else Column(Modifier.fillMaxSize().padding(16.dp)) {
+                        Text("Discover",fontSize=24.sp,fontWeight=FontWeight.Bold,color=Ink)
+                        Text("Find people who share what you love", color=MutedNav, modifier=Modifier.padding(top=4.dp, bottom=12.dp))
+                        OutlinedTextField(searchText,{searchText=it},label={Text("Search by name or username")},modifier=Modifier.fillMaxWidth(),singleLine=true)
+                        Button(onClick={scope.launch{searchPeople()}},modifier=Modifier.padding(top=8.dp).fillMaxWidth()){Text("Search")}
+                        LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp), modifier=Modifier.padding(top=12.dp)) {
+                            items(results, key = { it.id }) { item ->
+                                Card(colors=CardDefaults.cardColors(containerColor=NavySurface), shape=RoundedCornerShape(16.dp), modifier=Modifier.fillMaxWidth().clickable { selectedPerson = item; scope.launch { loadPersonPosts(item.id) } }) {
+                                    Row(Modifier.padding(14.dp), verticalAlignment=Alignment.CenterVertically) {
+                                        Surface(modifier=Modifier.size(44.dp),shape=CircleShape,color=NavyRaised){Box(contentAlignment=Alignment.Center){Text(item.title.take(1).uppercase(),color=Blue,fontWeight=FontWeight.Bold)}}
+                                        Column(Modifier.weight(1f).padding(start=12.dp)) {
+                                            Text(item.title.substringBefore("  @"),fontWeight=FontWeight.Bold,color=Ink)
+                                            Text(item.title.substringAfter("  ", ""),color=MutedNav,fontSize=12.sp)
+                                            if(item.detail.isNotBlank()) Text(item.detail,color=MutedNav,fontSize=12.sp,maxLines=2)
+                                        }
+                                        Text("›", color=Blue, fontSize=24.sp)
+                                    }
+                                }
+                            }
+                        }
                     }
                     "Create" -> {
                         val activeToken = token
@@ -551,7 +609,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                             dateOfBirth = dateOfBirth, onDateOfBirth = { dateOfBirth = it }, busy = busy, error = error,
                             onFinish = { scope.launch { completeOnboarding() } }
                         )
-                    } else Column(Modifier.fillMaxSize().padding(20.dp)) {
+                    } else Column(Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState())) {
                         Text(displayName.ifBlank{"Your profile"},fontSize=25.sp,fontWeight=FontWeight.Bold,color=Ink)
                         Text("@$username",color=Color.Gray)
                         OutlinedTextField(displayName,{displayName=it},label={Text("Display name")},modifier=Modifier.fillMaxWidth())
