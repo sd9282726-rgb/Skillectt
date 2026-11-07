@@ -26,6 +26,7 @@ interface CommunityPost {
   id: string;
   content: string;
   image_url: string | null;
+  media_type: "image" | "video" | "text";
   tags: string[] | null;
   likes_count: number;
   comments_count: number;
@@ -71,7 +72,7 @@ export default function CommunityDetail({ id }: { id: string }) {
       supabase
         .from("posts")
         .select(`
-          id, content, image_url, tags, likes_count, comments_count, created_at, author_id,
+          id, content, image_url, media_type, tags, likes_count, comments_count, created_at, author_id,
           profiles:author_id (id, display_name, username, avatar_url)
         `)
         .eq("community_id", id)
@@ -259,6 +260,7 @@ export default function CommunityDetail({ id }: { id: string }) {
                 id: post.id,
                 content: post.content,
                 image: post.image_url || undefined,
+                mediaType: post.media_type || "text",
                 tags: post.tags || [],
                 likesCount: post.likes_count,
                 commentsCount: post.comments_count,
