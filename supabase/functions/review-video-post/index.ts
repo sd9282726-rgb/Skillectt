@@ -21,31 +21,52 @@ Deno.serve(async (request: Request) => {
   const id = body.media_asset_id, decision = body.decision;
   if (typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) return json(400, { error: "Invalid media_asset_id" });
   if (decision !== "approve" && decision !== "reject") return json(400, { error: "Decision must be approve or reject" });
-  const result = await fetch(base + "/rest/v1/media_assets?select=id,post_id,storage_path,status,media_type&id=eq." + id + "&status=in.(pending,quarantined)&media_type=in.(video,image)&limit=1", { headers: h(service) });
+  const result = await fetch(base + "/rest/v1/media_assets?select=id,post_id,storage_path,status,media_type,public_url,mime_type&id=eq." + id + "&status=in.(pending,quarantined)&media_type=in.(video,image)&limit=1", { headers: h(service) });
   if (!result.ok) return json(503, { error: "Could not load moderation record" });
   const rows = await result.json(), asset = rows[0];
   if (!asset) return json(404, { error: "Pending media not found" });
+  const storedPath = String(asset.storage_path || "");
+  const prefix = "media-quarantine/";
+  if (!storedPath.startsWith(prefix)) return json(503, { error: "Private media file path is missing" });
+  const path = storedPath.slice(prefix.length).split("/").map(encodeURIComponent).join("/");
+
+  if (decision === "approve") {
+    const privateFile = await fetch(base + "/storage/v1/object/media-quarantine/" + path, { headers: h(service) });
+    if (!privateFile.ok) return json(503, { error: "Could not retrieve the private media file for review" });
+    const bytes = await privateFile.arrayBuffer();
+    if (!bytes.byteLength || bytes.byteLength > 50 * 1024 * 1024) return json(413, { error: "Media file is empty or exceeds the review size limit" });
+    const published = await fetch(base + "/storage/v1/object/post-media/" + path, {
+      method: "POST",
+      headers: { ...h(service), "Content-Type": asset.mime_type || (asset.media_type === "video" ? "video/mp4" : "image/jpeg"), "x-upsert": "true" },
+      body: bytes,
+    });
+    if (!published.ok) return json(503, { error: "Could not publish the approved media file" });
+  }
+
   if (asset.post_id) {
     const postPatch = await fetch(base + "/rest/v1/posts?id=eq." + asset.post_id, {
       method: "PATCH", headers: { ...h(service), "Content-Type": "application/json", Prefer: "return=minimal" },
       body: JSON.stringify({ moderation_hidden: decision !== "approve" }),
     });
-    if (!postPatch.ok) return json(503, { error: "Could not update post visibility; review remains pending" });
+    if (!postPatch.ok) {
+      if (decision === "approve") await fetch(base + "/storage/v1/object/post-media/" + path, { method: "DELETE", headers: h(service) });
+      return json(503, { error: "Could not update post visibility; review remains pending" });
+    }
   }
-  const patch = await fetch(base + "/rest/v1/media_assets?id=eq." + id + "&status=eq.pending", {
+
+  const patch = await fetch(base + "/rest/v1/media_assets?id=eq." + id + "&status=in.(pending,quarantined)", {
     method: "PATCH", headers: { ...h(service), "Content-Type": "application/json", Prefer: "return=minimal" },
     body: JSON.stringify({ status: decision === "approve" ? "approved" : "rejected", reviewed_at: new Date().toISOString(), decision_reason: decision === "approve" ? "Approved by a Skillect moderator" : "Rejected by a Skillect moderator", callback_token: null }),
   });
   if (!patch.ok) {
-    if (asset.post_id && decision === "approve") await fetch(base + "/rest/v1/posts?id=eq." + asset.post_id, { method: "PATCH", headers: { ...h(service), "Content-Type": "application/json" }, body: JSON.stringify({ moderation_hidden: true }) });
+    if (asset.post_id && decision === "approve") {
+      await fetch(base + "/rest/v1/posts?id=eq." + asset.post_id, { method: "PATCH", headers: { ...h(service), "Content-Type": "application/json" }, body: JSON.stringify({ moderation_hidden: true }) });
+      await fetch(base + "/storage/v1/object/post-media/" + path, { method: "DELETE", headers: h(service) });
+    }
     return json(503, { error: "Could not save moderation decision" });
   }
   if (decision === "reject") {
-    const prefix = "media-quarantine/", stored = String(asset.storage_path || "");
-    if (stored.startsWith(prefix)) {
-      const path = stored.slice(prefix.length).split("/").map(encodeURIComponent).join("/");
-      await fetch(base + "/storage/v1/object/post-media/" + path, { method: "DELETE", headers: h(service) });
-    }
+    await fetch(base + "/storage/v1/object/post-media/" + path, { method: "DELETE", headers: h(service) });
   }
   return json(200, { status: decision === "approve" ? "approved" : "rejected", post_id: asset.post_id });
 });
