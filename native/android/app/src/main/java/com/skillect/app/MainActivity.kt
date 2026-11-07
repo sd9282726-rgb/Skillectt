@@ -655,6 +655,16 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         TextButton(onClick={
                             token = null
                             userId = null
+                            displayName = ""
+                            username = ""
+                            bio = ""
+                            dateOfBirth = ""
+                            onboarded = false
+                            isPrivate = false
+                            likedIds = emptySet()
+                            savedIds = emptySet()
+                            selectedPerson = null
+                            selectedPersonPosts = emptyList()
                             tab = "Home"
                             onSignOut()
                         }){Text("Sign out", color=Color.Red)}
@@ -684,6 +694,17 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         onSignOut = {
                             token = null
                             userId = null
+                            displayName = ""
+                            username = ""
+                            bio = ""
+                            dateOfBirth = ""
+                            onboarded = false
+                            isPrivate = false
+                            likedIds = emptySet()
+                            savedIds = emptySet()
+                            selectedPerson = null
+                            selectedPersonPosts = emptyList()
+                            tab = "Home"
                             onSignOut()
                         },
                         versionName = BuildConfig.VERSION_NAME,
