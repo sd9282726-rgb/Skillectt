@@ -160,6 +160,26 @@ fun AuthGate(
                 }
             )
         }
+        if (mode == "signin") {
+            TextButton(
+                onClick = {
+                    scope.launch {
+                        localBusy = true
+                        localError = null
+                        try {
+                            if (email.isBlank()) error("Enter your email address first")
+                            apiPost("/auth/v1/recover", null, org.json.JSONObject().put("email", email.trim()))
+                            localError = "If that account exists, password reset instructions have been sent."
+                        } catch (e: Exception) {
+                            localError = e.message ?: "Could not request a password reset"
+                        }
+                        localBusy = false
+                    }
+                },
+                enabled = !working && email.isNotBlank(),
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Forgot password?") }
+        }
         Spacer(Modifier.height(40.dp))
     }
 }
