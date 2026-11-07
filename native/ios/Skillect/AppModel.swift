@@ -442,14 +442,14 @@ final class AppModel: ObservableObject {
                 var multipart = Data()
                 func append(_ value: String) { multipart.append(value.data(using: .utf8)!) }
                 let ext = mime == "image/jpeg" ? "jpg" : mime.components(separatedBy: "/").last ?? "img"
-                append("--\(boundary)\\r\\n")
-                append("Content-Disposition: form-data; name=\"file\"; filename=\"upload.\(ext)\"\\r\\n")
-                append("Content-Type: \(mime)\\r\\n\\r\\n")
+                append("--\(boundary)\r\n")
+                append("Content-Disposition: form-data; name=\"file\"; filename=\"upload.\(ext)\"\r\n")
+                append("Content-Type: \(mime)\r\n\r\n")
                 multipart.append(imageData)
-                append("\\r\\n--\(boundary)\\r\\n")
-                append("Content-Disposition: form-data; name=\"content\"\\r\\n\\r\\n")
+                append("\r\n--\(boundary)\r\n")
+                append("Content-Disposition: form-data; name=\"content\"\r\n\r\n")
                 append(cleanText)
-                append("\\r\\n--\(boundary)--\\r\\n")
+                append("\r\n--\(boundary)--\r\n")
                 let result = try await request(path: "/functions/v1/moderate-media", method: "POST", body: multipart, contentType: "multipart/form-data; boundary=\(boundary)")
                 let response = try JSONSerialization.jsonObject(with: result) as? [String: Any]
                 guard response?["status"] as? String == "published_moderating" else {
