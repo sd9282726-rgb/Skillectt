@@ -78,6 +78,16 @@ function HomeRedirect() {
   );
 }
 
+function OnboardingRoute() {
+  const { user, loading } = useAuth();
+  const { profile, isProfileLoading } = useApp();
+  if (loading || (user && isProfileLoading)) return <LoadingScreen />;
+  if (!user) return <Redirect to="/sign-in" />;
+  if (!profile) return <ProfileRecovery />;
+  if (profile.onboarded) return <Redirect to="/" />;
+  return <Onboarding />;
+}
+
 function AuthedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { profile, isProfileLoading } = useApp();
@@ -186,17 +196,7 @@ function AppRoutes() {
         )}
       </Route>
 
-      <Route path="/onboarding">
-        {() => {
-          const { user, loading } = useAuth();
-          const { profile, isProfileLoading } = useApp();
-          if (loading || (user && isProfileLoading)) return <LoadingScreen />;
-          if (!user) return <Redirect to="/sign-in" />;
-          if (!profile) return <ProfileRecovery />;
-          if (profile.onboarded) return <Redirect to="/" />;
-          return <Onboarding />;
-        }}
-      </Route>
+      <Route path="/onboarding" component={OnboardingRoute} />
 
       <Route component={NotFound} />
     </Switch>
