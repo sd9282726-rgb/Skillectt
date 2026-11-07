@@ -57,7 +57,7 @@ export default function App() {
     }
     supabase
       .from('profiles')
-      .select('*')
+      .select('id, username, display_name, bio, avatar_url, skills, location')
       .eq('id', session.user.id)
       .maybeSingle()
       .then(({ data }) => setProfile((data as Profile) || null));
