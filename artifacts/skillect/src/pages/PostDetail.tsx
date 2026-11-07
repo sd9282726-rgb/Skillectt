@@ -16,6 +16,7 @@ interface Post {
   id: string;
   content: string;
   image_url?: string | null;
+  media_type?: "image" | "video" | "text";
   tags: string[];
   likes_count: number;
   comments_count: number;
