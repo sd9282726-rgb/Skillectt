@@ -169,7 +169,6 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                 val p = arr.getJSONObject(i)
                 postFromJson(p)
             }
-            val me = userId
             if (me != null) {
                 val likes = apiArray("/rest/v1/post_likes?select=post_id&user_id=eq.$me", token)
                 likedIds = (0 until likes.length()).map { likes.getJSONObject(it).optString("post_id") }.toSet()
