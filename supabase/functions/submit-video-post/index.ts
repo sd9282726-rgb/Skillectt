@@ -39,6 +39,16 @@ Deno.serve(async (request: Request) => {
   const mimeByExt: Record<string, string> = { mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime" };
   if (!extension || !mimeByExt[extension] || caption.length > 5000) return json(415, { error: "Use MP4, WebM or MOV video and a caption up to 5,000 characters" });
 
+  const captionCheck = await fetch(base + "/functions/v1/moderate-text", {
+    method: "POST",
+    headers: { apikey: anon, Authorization: authorization, "Content-Type": "application/json" },
+    body: JSON.stringify({ type: "media_caption", content: caption }),
+  });
+  const captionDecision = captionCheck.ok ? await captionCheck.json() : null;
+  if (!captionCheck.ok || captionDecision?.status !== "approved") {
+    return json(captionCheck.status || 503, { error: captionDecision?.error || "Caption safety screening failed. Nothing was published." });
+  }
+
   const encoded = safePath(storagePath);
   const source = await fetch(base + "/storage/v1/object/media-quarantine/" + encoded, { headers: adminHeaders(service) });
   if (!source.ok) return json(404, { error: "Private video upload was not found" });
