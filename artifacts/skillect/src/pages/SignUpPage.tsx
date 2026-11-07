@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { supabase } from "@/lib/supabase";
 
 export default function SignUpPage() {
   const { signUp } = useAuth();
@@ -24,6 +25,15 @@ export default function SignUpPage() {
     e.preventDefault();
     setError(null);
 
+    const cleanUsername = username.trim().toLowerCase();
+    if (cleanUsername.length < 3 || cleanUsername.length > 24) {
+      setError("Username must be between 3 and 24 characters");
+      return;
+    }
+    if (!/^[a-z0-9_]+$/.test(cleanUsername)) {
+      setError("Username can contain only letters, numbers, and underscores");
+      return;
+    }
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       return;
@@ -43,9 +53,26 @@ export default function SignUpPage() {
 
     setLoading(true);
 
-    const { error } = await signUp(email.trim(), password, {
-      display_name: displayName.trim(),
-      username: username.trim().toLowerCase(),
+    const { data: existingUsername, error: usernameError } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("username", cleanUsername)
+      .maybeSingle();
+
+    if (usernameError) {
+      setError("Could not check username availability. Please try again.");
+      setLoading(false);
+      return;
+    }
+    if (existingUsername) {
+      setError("That username is already taken. Choose another one.");
+      setLoading(false);
+      return;
+    }
+
+    const { error } = await signUp(email.trim().toLowerCase(), password, {
+      display_name: displayName.trim().slice(0, 50),
+      username: cleanUsername,
     });
 
     if (error) {
@@ -107,7 +134,7 @@ export default function SignUpPage() {
             <Input
               id="displayName"
               value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
+              onChange={(e) => setDisplayName(e.target.value.slice(0, 50))}
               required
               className="h-11"
             />
@@ -118,8 +145,10 @@ export default function SignUpPage() {
             <Input
               id="username"
               value={username}
-              onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ""))}
+              onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 24))}
               required
+              minLength={3}
+              maxLength={24}
               className="h-11"
               placeholder="yourname"
             />
