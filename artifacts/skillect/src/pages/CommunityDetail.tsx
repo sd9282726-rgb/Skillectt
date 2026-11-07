@@ -116,6 +116,11 @@ export default function CommunityDetail({ id }: { id: string }) {
 
   useEffect(() => {
     void loadCommunity();
+    const channel = supabase
+      .channel(`community-posts:${id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "posts", filter: `community_id=eq.${id}` }, () => void loadCommunity())
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
   }, [id, user?.id]);
 
   const toggleJoin = async () => {
