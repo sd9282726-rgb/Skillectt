@@ -26,6 +26,7 @@ export default function Onboarding() {
   const [location, setLocation2] = useState("");
   const [skills, setSkills] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const toggleSkill = (skill: string) => {
     setSkills((prev) =>
@@ -36,14 +37,19 @@ export default function Onboarding() {
   const handleSubmit = async () => {
     if (!displayName.trim()) return;
     setSubmitting(true);
+    setError(null);
     try {
-      await completeOnboarding({
+      const saved = await completeOnboarding({
         display_name: displayName.trim(),
-        bio,
-        location,
+        bio: bio.trim().slice(0, 300),
+        location: location.trim().slice(0, 100),
         skills,
       });
-      setLocation("/");
+      if (!saved) {
+        setError("We couldn't save your profile. Please try again.");
+      } else {
+        setLocation("/");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -60,6 +66,8 @@ export default function Onboarding() {
           Tell the community what you're learning and building.
         </p>
 
+        {error && <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+
         <div className="space-y-5">
           <div>
             <label className="text-sm font-medium mb-1.5 block text-gray-700">Display name</label>
@@ -74,6 +82,7 @@ export default function Onboarding() {
             <label className="text-sm font-medium mb-1.5 block text-gray-700">Bio</label>
             <textarea
               value={bio}
+              maxLength={300}
               onChange={(e) => setBio(e.target.value)}
               placeholder="What are you learning or building?"
               rows={3}
