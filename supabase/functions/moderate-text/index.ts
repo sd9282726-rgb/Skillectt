@@ -86,9 +86,12 @@ Deno.serve(async (request: Request) => {
         ...(Array.isArray(input.interests) ? input.interests.map(String) : []),
       ]
     : [];
-  const content = (type === "profile" ? profileFields.join("\n") : String(input.content || "")).trim();
-  if (!["post", "comment", "message", "profile", "media_caption"].includes(type)) return json(400, { error: "Unsupported content type" });
-  const maxLength = type === "post" || type === "media_caption" ? 5000 : type === "comment" ? 1500 : type === "profile" ? 1500 : 2000;
+  const projectFields = type === "project"
+    ? [String(input.title || ""), String(input.description || ""), String(input.link || "")]
+    : [];
+  const content = (type === "profile" ? profileFields.join("\n") : type === "project" ? projectFields.join("\n") : String(input.content || "")).trim();
+  if (!["post", "comment", "message", "profile", "media_caption", "project"].includes(type)) return json(400, { error: "Unsupported content type" });
+  const maxLength = type === "post" || type === "media_caption" ? 5000 : type === "comment" ? 1500 : type === "profile" ? 1500 : type === "project" ? 2500 : 2000;
   if (!content || content.length > maxLength) return json(400, { error: "Text is empty or exceeds the allowed length" });
 
   try {
@@ -189,6 +192,15 @@ Deno.serve(async (request: Request) => {
     if (Object.prototype.hasOwnProperty.call(input, "country")) record.country = String(input.country || "").trim().slice(0, 2).toUpperCase();
     if (Object.prototype.hasOwnProperty.call(input, "is_private")) record.is_private = Boolean(input.is_private);
     if (Object.prototype.hasOwnProperty.call(input, "onboarded")) record.onboarded = Boolean(input.onboarded);
+  } else if (type === "project") {
+    const title = String(input.title || "").trim().slice(0, 100);
+    const description = String(input.description || "").trim().slice(0, 2000);
+    const link = String(input.link || "").trim().slice(0, 500);
+    const status = String(input.status || "in_progress");
+    if (!title) return json(400, { error: "Project title is required" });
+    if (link && !/^https?:\/\//i.test(link)) return json(400, { error: "Project links must use http or https" });
+    if (!["in_progress", "completed", "on_hold"].includes(status)) return json(400, { error: "Invalid project status" });
+    record = { author_id: userId, title, description, link: link || null, status };
   } else if (type === "post") {
     const imageUrl = input.image_url ? String(input.image_url) : null;
     if (imageUrl) {
@@ -216,6 +228,18 @@ Deno.serve(async (request: Request) => {
     if (type === "profile") {
       await rest(base, service, "profiles?id=eq." + encodeURIComponent(userId), "PATCH", record);
       return json(200, { status: "approved" });
+    }
+    if (type === "project") {
+      const projectId = input.project_id ? String(input.project_id) : null;
+      if (projectId) {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(projectId)) return json(400, { error: "Invalid project" });
+        const owned = await rest(base, service, "projects?select=id&id=eq." + encodeURIComponent(projectId) + "&author_id=eq." + encodeURIComponent(userId) + "&limit=1");
+        if (!Array.isArray(owned) || owned.length === 0) return json(404, { error: "Project not found" });
+        await rest(base, service, "projects?id=eq." + encodeURIComponent(projectId) + "&author_id=eq." + encodeURIComponent(userId), "PATCH", record);
+        return json(200, { status: "approved", id: projectId });
+      }
+      const createdProject = await rest(base, service, "projects?select=id", "POST", record);
+      return json(200, { status: "approved", id: Array.isArray(createdProject) ? createdProject[0]?.id : null });
     }
     const table = type === "post" ? "posts" : type === "comment" ? "comments" : "messages";
     const created = await rest(base, service, table + "?select=id", "POST", record);
