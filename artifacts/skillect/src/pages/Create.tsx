@@ -98,6 +98,8 @@ export default function Create() {
           const form = new FormData();
           form.append("file", file, file.name);
           form.append("content", content.trim());
+          form.append("tags", JSON.stringify(tags));
+          form.append("category", category);
           const { data, error: mediaError } = await supabase.functions.invoke("moderate-media", { body: form });
           if (mediaError) throw new Error(mediaError.message || "Image could not be submitted for screening.");
           if (!data?.post_id) throw new Error(data?.error || "Image post could not be created.");
@@ -110,7 +112,7 @@ export default function Create() {
           if (uploadError) throw uploadError;
 
           const { data, error: videoError } = await supabase.functions.invoke("submit-video-post", {
-            body: { storage_path: path, content: content.trim() },
+            body: { storage_path: path, content: content.trim(), tags, category },
           });
           if (videoError || !data?.post_id) {
             await supabase.storage.from("media-quarantine").remove([path]);
