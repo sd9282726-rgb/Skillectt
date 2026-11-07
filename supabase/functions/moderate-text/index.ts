@@ -75,10 +75,20 @@ Deno.serve(async (request: Request) => {
   let input: Record<string, any>;
   try { input = await request.json(); } catch { return json(400, { error: "Invalid JSON" }); }
   const type = String(input.type || "");
-  const profileFields = type === "profile" ? [String(input.display_name || ""), String(input.username || ""), String(input.bio || "")] : [];
+  const profileFields = type === "profile"
+    ? [
+        String(input.display_name || ""),
+        String(input.username || ""),
+        String(input.bio || ""),
+        String(input.location || ""),
+        String(input.website || ""),
+        ...(Array.isArray(input.skills) ? input.skills.map(String) : []),
+        ...(Array.isArray(input.interests) ? input.interests.map(String) : []),
+      ]
+    : [];
   const content = (type === "profile" ? profileFields.join("\n") : String(input.content || "")).trim();
   if (!["post", "comment", "message", "profile", "media_caption"].includes(type)) return json(400, { error: "Unsupported content type" });
-  const maxLength = type === "post" || type === "media_caption" ? 5000 : type === "comment" ? 1500 : type === "profile" ? 500 : 2000;
+  const maxLength = type === "post" || type === "media_caption" ? 5000 : type === "comment" ? 1500 : type === "profile" ? 1500 : 2000;
   if (!content || content.length > maxLength) return json(400, { error: "Text is empty or exceeds the allowed length" });
 
   try {
@@ -172,6 +182,13 @@ Deno.serve(async (request: Request) => {
     if (Object.prototype.hasOwnProperty.call(input, "display_name")) record.display_name = String(input.display_name || "").trim().slice(0, 80);
     if (Object.prototype.hasOwnProperty.call(input, "username")) record.username = String(input.username || "").trim().slice(0, 30);
     if (Object.prototype.hasOwnProperty.call(input, "bio")) record.bio = String(input.bio || "").trim().slice(0, 300);
+    if (Object.prototype.hasOwnProperty.call(input, "location")) record.location = String(input.location || "").trim().slice(0, 100);
+    if (Object.prototype.hasOwnProperty.call(input, "website")) record.website = String(input.website || "").trim().slice(0, 500);
+    if (Object.prototype.hasOwnProperty.call(input, "skills")) record.skills = Array.isArray(input.skills) ? input.skills.map((item: unknown) => String(item).trim().slice(0, 40)).filter(Boolean).slice(0, 20) : [];
+    if (Object.prototype.hasOwnProperty.call(input, "interests")) record.interests = Array.isArray(input.interests) ? input.interests.map((item: unknown) => String(item).trim().slice(0, 40)).filter(Boolean).slice(0, 20) : [];
+    if (Object.prototype.hasOwnProperty.call(input, "country")) record.country = String(input.country || "").trim().slice(0, 2).toUpperCase();
+    if (Object.prototype.hasOwnProperty.call(input, "is_private")) record.is_private = Boolean(input.is_private);
+    if (Object.prototype.hasOwnProperty.call(input, "onboarded")) record.onboarded = Boolean(input.onboarded);
   } else if (type === "post") {
     const imageUrl = input.image_url ? String(input.image_url) : null;
     if (imageUrl) {
