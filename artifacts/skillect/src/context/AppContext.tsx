@@ -11,7 +11,6 @@ import { supabase } from "@/lib/supabase";
 
 export interface Profile {
   id: string;
-  email?: string | null;
   display_name: string;
   username: string;
   avatar_url?: string | null;
@@ -53,7 +52,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsProfileLoading(true);
     const { data, error } = await supabase
       .from("profiles")
-      .select("*")
+      .select("id,display_name,username,avatar_url,cover_url,bio,location,website,skills,interests,country,onboarded,is_private,created_at,updated_at")
       .eq("id", user.id)
       .single();
 
