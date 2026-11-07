@@ -394,7 +394,7 @@ final class AppModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
-            let data = try await request(path: "/rest/v1/posts?select=id,author_id,content,image_url,media_type,likes_count,comments_count,profiles(display_name,username)&order=created_at.desc&limit=50")
+            let data = try await request(path: "/rest/v1/posts?select=id,author_id,content,image_url,media_type,likes_count,comments_count,profiles(display_name,username)&moderation_hidden=eq.false&order=created_at.desc&limit=50")
             posts = try JSONDecoder().decode([FeedPost].self, from: data)
             if let me = userId {
                 let likes = try await request(path: "/rest/v1/post_likes?select=post_id&user_id=eq.\(me)")
@@ -422,7 +422,7 @@ final class AppModel: ObservableObject {
             _ = try await request(path: "/storage/v1/object/media-quarantine/\(storagePath)", method: "POST", body: videoData, contentType: mimeType)
             let registration = try JSONSerialization.data(withJSONObject: ["storage_path": storagePath, "content": content.trimmingCharacters(in: .whitespacesAndNewlines)])
             _ = try await request(path: "/functions/v1/submit-video-post", method: "POST", body: registration)
-            infoMessage = "Video submitted for moderator review. It will appear in the feed after approval."
+            infoMessage = "Video post published. Automated safety screening is running in the background."\n            await loadFeed()
         } catch { errorMessage = error.localizedDescription }
     }
 
@@ -430,16 +430,38 @@ final class AppModel: ObservableObject {
         guard let me = userId else { return }
         let cleanText = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanText.isEmpty || imageData != nil else { return }
-        guard imageData == nil else {
-            errorMessage = "Photo publishing is paused until automated safety screening is connected."
-            return
-        }
         isBusy = true
         defer { isBusy = false }
         do {
-            let post: [String: Any] = ["type": "post", "content": cleanText, "tags": [String]()]
-            let body = try JSONSerialization.data(withJSONObject: post)
-            _ = try await request(path: "/functions/v1/moderate-text", method: "POST", body: body)
+            if let imageData {
+                let mime = imageMime ?? "image/jpeg"
+                guard ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"].contains(mime), imageData.count <= 12 * 1024 * 1024 else {
+                    throw NSError(domain: "Skillect", code: 415, userInfo: [NSLocalizedDescriptionKey: "Choose a supported image up to 12 MB"])
+                }
+                let boundary = "SkillectBoundary-\(UUID().uuidString)"
+                var multipart = Data()
+                func append(_ value: String) { multipart.append(value.data(using: .utf8)!) }
+                let ext = mime == "image/jpeg" ? "jpg" : mime.components(separatedBy: "/").last ?? "img"
+                append("--\(boundary)\\r\\n")
+                append("Content-Disposition: form-data; name=\"file\"; filename=\"upload.\(ext)\"\\r\\n")
+                append("Content-Type: \(mime)\\r\\n\\r\\n")
+                multipart.append(imageData)
+                append("\\r\\n--\(boundary)\\r\\n")
+                append("Content-Disposition: form-data; name=\"content\"\\r\\n\\r\\n")
+                append(cleanText)
+                append("\\r\\n--\(boundary)--\\r\\n")
+                let result = try await request(path: "/functions/v1/moderate-media", method: "POST", body: multipart, contentType: "multipart/form-data; boundary=\(boundary)")
+                let response = try JSONSerialization.jsonObject(with: result) as? [String: Any]
+                guard response?["status"] as? String == "published_moderating" else {
+                    throw NSError(domain: "Skillect", code: 500, userInfo: [NSLocalizedDescriptionKey: "Image post was not published"])
+                }
+                infoMessage = "Photo post published. Automated safety screening is running in the background."
+            } else {
+                let post: [String: Any] = ["type": "post", "content": cleanText, "tags": [String]()]
+                let body = try JSONSerialization.data(withJSONObject: post)
+                _ = try await request(path: "/functions/v1/moderate-text", method: "POST", body: body)
+                infoMessage = "Post published."
+            }
             await loadFeed()
         } catch { errorMessage = error.localizedDescription }
     }
