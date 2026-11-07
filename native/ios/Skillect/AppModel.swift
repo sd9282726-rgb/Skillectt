@@ -427,7 +427,7 @@ final class AppModel: ObservableObject {
     }
 
     func createPost(_ content: String, imageData: Data? = nil, imageMime: String? = nil) async {
-        guard let me = userId else { return }
+        guard userId != nil else { return }
         let cleanText = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanText.isEmpty || imageData != nil else { return }
         isBusy = true
