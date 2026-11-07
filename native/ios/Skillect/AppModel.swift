@@ -422,7 +422,8 @@ final class AppModel: ObservableObject {
             _ = try await request(path: "/storage/v1/object/media-quarantine/\(storagePath)", method: "POST", body: videoData, contentType: mimeType)
             let registration = try JSONSerialization.data(withJSONObject: ["storage_path": storagePath, "content": content.trimmingCharacters(in: .whitespacesAndNewlines)])
             _ = try await request(path: "/functions/v1/submit-video-post", method: "POST", body: registration)
-            infoMessage = "Video post published. Automated safety screening is running in the background."\n            await loadFeed()
+            infoMessage = "Video post published. Automated safety screening is running in the background."
+            await loadFeed()
         } catch { errorMessage = error.localizedDescription }
     }
 
