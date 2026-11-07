@@ -14,10 +14,29 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import java.util.Calendar
+import java.util.GregorianCalendar
 
-private val AuthBlue = Color(0xFF00C878)
+private val AuthBlue = Color(0xFF72B7FF)
 private val AuthInk = Color(0xFFF2F2F2)
-private val AuthBg = Color(0xFF050509)
+private val AuthBg = Color(0xFF07172B)
+
+internal fun isAtLeast16(value: String): Boolean {
+    return try {
+        val parts = value.split("-")
+        if (parts.size != 3) return false
+        val year = parts[0].toInt()
+        val month = parts[1].toInt()
+        val day = parts[2].toInt()
+        val birth = GregorianCalendar(year, month - 1, day).apply { isLenient = false }
+        birth.time
+        val today = Calendar.getInstance()
+        var age = today.get(Calendar.YEAR) - year
+        if (today.get(Calendar.MONTH) < month - 1 ||
+            (today.get(Calendar.MONTH) == month - 1 && today.get(Calendar.DAY_OF_MONTH) < day)) age--
+        age >= 16 && !birth.after(today)
+    } catch (_: Exception) { false }
+}
 
 @Composable
 fun AuthGate(
@@ -49,7 +68,7 @@ fun AuthGate(
     ) {
         Text("Skillect", color = AuthBlue, fontSize = 34.sp, fontWeight = FontWeight.ExtraBold)
         Text(
-            "Skills-first social for teens learning and building.",
+            "A worldwide space to share skills, projects and ideas.",
             color = AuthInk,
             modifier = Modifier.padding(top = 6.dp, bottom = 20.dp)
         )
@@ -86,7 +105,7 @@ fun AuthGate(
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(dob, { dob = it }, label = { Text("Date of birth (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             Text(
-                "Skillect is for ages 13–19. Your birth date stays private.",
+                "Skillect is for people aged 16 and above. Your birth date stays private.",
                 color = Color.Gray,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 6.dp)
@@ -101,7 +120,7 @@ fun AuthGate(
                     onClearError()
                     try {
                         if (mode == "signup") {
-                            if (dob.trim().length < 8) error("Enter date of birth as YYYY-MM-DD")
+                            if (!isAtLeast16(dob.trim())) error("Skillect is for people aged 16 and above. Enter a valid date of birth.")
                             val meta = org.json.JSONObject()
                                 .put("display_name", displayName.ifBlank { email.substringBefore("@") })
                                 .put("username", username.ifBlank { "user_" + System.currentTimeMillis().toString().takeLast(6) })
@@ -169,7 +188,7 @@ fun OnboardingGate(
             }
             1 -> {
                 OutlinedTextField(dateOfBirth, onDateOfBirth, label = { Text("Date of birth YYYY-MM-DD") }, modifier = Modifier.fillMaxWidth())
-                Text("Required. Ages 13–19 only. Never shown publicly.", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                Text("Required for age verification (16+). Never shown publicly.", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
             }
             else -> {
                 OutlinedTextField(bio, onBio, label = { Text("Short bio") }, modifier = Modifier.fillMaxWidth().height(120.dp))
