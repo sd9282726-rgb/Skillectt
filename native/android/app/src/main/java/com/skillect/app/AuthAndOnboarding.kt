@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.GregorianCalendar
+import java.util.TimeZone
 
 private val AuthBlue = Color(0xFF72B7FF)
 private val AuthInk = Color(0xFFF2F2F2)
@@ -29,9 +30,10 @@ internal fun isAtLeast16(value: String): Boolean {
         val year = parts[0].toInt()
         val month = parts[1].toInt()
         val day = parts[2].toInt()
-        val birth = GregorianCalendar(year, month - 1, day).apply { isLenient = false }
+        val utc = TimeZone.getTimeZone("UTC")
+        val birth = GregorianCalendar(utc).apply { clear(); set(year, month - 1, day); isLenient = false }
         birth.time
-        val today = Calendar.getInstance()
+        val today = Calendar.getInstance(utc)
         var age = today.get(Calendar.YEAR) - year
         if (today.get(Calendar.MONTH) < month - 1 ||
             (today.get(Calendar.MONTH) == month - 1 && today.get(Calendar.DAY_OF_MONTH) < day)) age--
