@@ -1,8 +1,12 @@
 package com.skillect.app
 
 import android.os.Bundle
+import android.net.Uri
+import android.widget.VideoView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.ui.viewinterop.AndroidView
+import coil.compose.AsyncImage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -36,7 +40,7 @@ private val client = OkHttpClient()
 private const val URL = BuildConfig.SUPABASE_URL
 private const val KEY = BuildConfig.SUPABASE_KEY
 
-data class Post(val id: String, val authorId: String, val body: String, val author: String, val handle: String, val image: String?, val likes: Int, val comments: Int)
+data class Post(val id: String, val authorId: String, val body: String, val author: String, val handle: String, val image: String?, val mediaUrl: String?, val mediaType: String, val likes: Int, val comments: Int)
 data class SimpleItem(val id: String, val title: String, val detail: String)
 
 class MainActivity : ComponentActivity() {
@@ -103,10 +107,10 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     suspend fun loadFeed() {
         val active = token ?: return
         try {
-            val arr = apiArray("/rest/v1/posts?select=id,author_id,content,image_url,likes_count,comments_count,profiles(display_name,username)&order=created_at.desc&limit=50", active)
+            val arr = apiArray("/rest/v1/posts?select=id,author_id,content,image_url,media_type,likes_count,comments_count,profiles(display_name,username),media_assets(public_url,media_type,status)&moderation_hidden=eq.false&order=created_at.desc&limit=50", active)
             posts = (0 until arr.length()).map { i ->
                 val p = arr.getJSONObject(i); val profile = p.optJSONObject("profiles") ?: JSONObject()
-                Post(p.optString("id"), p.optString("author_id"), p.optString("content"), profile.optString("display_name", "Skillect member"), profile.optString("username", "member"), p.optString("image_url").takeIf { it.isNotBlank() }, p.optInt("likes_count"), p.optInt("comments_count"))
+                Post(p.optString("id"), p.optString("author_id"), p.optString("content"), profile.optString("display_name", "Skillect member"), profile.optString("username", "member"), p.optString("image_url").takeIf { it.isNotBlank() }, p.optJSONArray("media_assets")?.let { assets -> (0 until assets.length()).map { assets.getJSONObject(it) }.firstOrNull { it.optString("status") == "approved" }?.optString("public_url")?.takeIf { it.isNotBlank() } }, p.optString("media_type", "text"), p.optInt("likes_count"), p.optInt("comments_count"))
             }
             val me = userId
             if (me != null) {
@@ -288,7 +292,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     }
 
     if (token == null) {
-        Column(Modifier.fillMaxSize().background(Color.White).padding(horizontal=28.dp), verticalArrangement=Arrangement.Center) {
+        Column(Modifier.fillMaxSize().background(SkillectBlack).padding(horizontal=28.dp), verticalArrangement=Arrangement.Center) {
             Text("Skillect", color=Blue, fontSize=34.sp, fontWeight=FontWeight.ExtraBold)
             Text("Grow skills. Share progress. Build together.", color=Ink, modifier=Modifier.padding(top=6.dp,bottom=28.dp))
             OutlinedTextField(email,{email=it},label={Text("Email")},modifier=Modifier.fillMaxWidth(),singleLine=true)
@@ -343,12 +347,12 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         if(posts.isEmpty()) Spacer(Modifier.fillMaxSize())
                         else LazyColumn(contentPadding=PaddingValues(14.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                             items(posts,key={it.id}) { post ->
-                                Card(colors=CardDefaults.cardColors(containerColor=Color.White),shape=RoundedCornerShape(18.dp),modifier=Modifier.fillMaxWidth()) {
+                                Card(colors=CardDefaults.cardColors(containerColor=Color(0xFF15151D)),shape=RoundedCornerShape(18.dp),modifier=Modifier.fillMaxWidth()) {
                                     Column(Modifier.padding(18.dp)) {
                                         Text(post.author,fontWeight=FontWeight.Bold,color=Ink)
                                         Text("@${post.handle}",color=Color.Gray,fontSize=12.sp)
                                         Text(post.body,color=Ink,modifier=Modifier.padding(top=12.dp),lineHeight=22.sp)
-                                        post.image?.let { Text("Media attached",color=Blue,fontSize=12.sp,modifier=Modifier.padding(top=10.dp)) }
+                                        post.mediaUrl?.let { media -> if (post.mediaType == "video") { AndroidView(factory = { ctx -> VideoView(ctx).apply { setVideoURI(Uri.parse(media)); setOnPreparedListener { it.isLooping = false; start() } } }, modifier = Modifier.fillMaxWidth().height(240.dp).padding(top = 10.dp)) } else { AsyncImage(model = media, contentDescription = "Post image", modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(top = 10.dp)) } } ?: post.image?.let { AsyncImage(model = it, contentDescription = "Post image", modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(top = 10.dp)) }
                                         Row(Modifier.fillMaxWidth().padding(top=10.dp),horizontalArrangement=Arrangement.SpaceBetween) {
                                             TextButton(onClick={scope.launch{toggleLike(post)}}){Text((if(likedIds.contains(post.id)) "♥ " else "♡ ")+post.likes)}
                                             TextButton(onClick={scope.launch{showCommentsFor=post.id;loadComments(post.id)}}){Text("Comments ${post.comments}")}
