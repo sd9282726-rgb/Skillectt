@@ -1,8 +1,13 @@
 // Fail-closed text moderation gateway for Skillect.
 // Uses the same Sightengine credentials as the image moderation function.
 // Requests must be authenticated with a signed-in Supabase user JWT.
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 const json = (status: number, body: Record<string, unknown>) =>
-  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" } });
 
 async function rest(base: string, key: string, path: string, method = "GET", body?: unknown) {
   const response = await fetch(base + "/rest/v1/" + path, {
@@ -46,6 +51,7 @@ function classify(scan: Record<string, any>): string[] {
 }
 
 Deno.serve(async (request: Request) => {
+  if (request.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (request.method !== "POST") return json(405, { error: "Method not allowed" });
   const base = Deno.env.get("SUPABASE_URL");
   const anon = Deno.env.get("SUPABASE_ANON_KEY");
