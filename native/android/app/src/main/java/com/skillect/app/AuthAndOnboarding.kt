@@ -16,8 +16,6 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.GregorianCalendar
-import java.util.Calendar
-import java.util.GregorianCalendar
 
 private val AuthBlue = Color(0xFF72B7FF)
 private val AuthInk = Color(0xFFF2F2F2)
