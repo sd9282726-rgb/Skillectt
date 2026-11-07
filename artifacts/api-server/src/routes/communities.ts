@@ -14,6 +14,15 @@ import { toCommunityDto } from "../lib/communities";
 
 const router: IRouter = Router();
 
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48) || `community-${Date.now()}`;
+}
+
 router.get("/communities", async (req, res): Promise<void> => {
   const viewerId = getUserId(req);
   const rows = await db.select().from(communitiesTable).orderBy(communitiesTable.createdAt);
@@ -21,6 +30,57 @@ router.get("/communities", async (req, res): Promise<void> => {
     rows.map((row) => toCommunityDto(row, viewerId)),
   );
   res.json(ListCommunitiesResponse.parse(dtos));
+});
+
+router.post("/communities", requireAuth, async (req, res): Promise<void> => {
+  const userId = getUserId(req)!;
+  await ensureProfile(userId);
+  const name = String(req.body?.name ?? "").trim();
+  const description = String(req.body?.description ?? "").trim();
+  const cover = String(req.body?.cover ?? req.body?.cover_url ?? "");
+  const tags = Array.isArray(req.body?.tags)
+    ? req.body.tags.map((t: unknown) => String(t)).slice(0, 12)
+    : [];
+  if (!name || name.length < 2) {
+    res.status(400).json({ error: "Community name is required (min 2 characters)" });
+    return;
+  }
+  const baseSlug = slugify(name);
+  let slug = baseSlug;
+  let attempt = 0;
+  while (attempt < 5) {
+    try {
+      const [created] = await db
+        .insert(communitiesTable)
+        .values({
+          name,
+          description,
+          cover,
+          tags,
+          // creator may be stored differently depending on schema; keep minimal fields
+        } as any)
+        .returning();
+      if (!created) {
+        res.status(500).json({ error: "Failed to create community" });
+        return;
+      }
+      await db
+        .insert(communityMembersTable)
+        .values({ communityId: created.id, userId } as any)
+        .onConflictDoNothing();
+      res.status(201).json(await toCommunityDto(created, userId, true));
+      return;
+    } catch (e: any) {
+      if (String(e?.message ?? e).includes("unique") || e?.code === "23505") {
+        attempt += 1;
+        slug = `${baseSlug}-${attempt}`;
+        continue;
+      }
+      res.status(500).json({ error: String(e?.message ?? e) });
+      return;
+    }
+  }
+  res.status(409).json({ error: "Could not allocate a unique community slug" });
 });
 
 router.get("/communities/:id", async (req, res): Promise<void> => {
