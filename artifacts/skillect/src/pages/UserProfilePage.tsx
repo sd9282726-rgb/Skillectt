@@ -38,6 +38,8 @@ export default function UserProfilePage({ id }: { id: string }) {
   const [followingCount, setFollowingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [followLoading, setFollowLoading] = useState(false);
+  const [messageLoading, setMessageLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentUserId && id === currentUserId) {
@@ -89,25 +91,73 @@ export default function UserProfilePage({ id }: { id: string }) {
   const toggleFollow = async () => {
     if (!user || followLoading) return;
     setFollowLoading(true);
+    setActionError(null);
 
-    if (isFollowing) {
-      await supabase
-        .from("follows")
-        .delete()
-        .eq("follower_id", user.id)
-        .eq("following_id", id);
-      setIsFollowing(false);
-      setFollowerCount((c) => Math.max(0, c - 1));
+    const result = isFollowing
+      ? await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", id)
+      : await supabase.from("follows").insert({ follower_id: user.id, following_id: id });
+
+    if (result.error) {
+      setActionError(result.error.message);
     } else {
-      await supabase.from("follows").insert({
-        follower_id: user.id,
-        following_id: id,
-      });
-      setIsFollowing(true);
-      setFollowerCount((c) => c + 1);
+      setIsFollowing(!isFollowing);
+      setFollowerCount((count) => Math.max(0, count + (isFollowing ? -1 : 1)));
     }
-
     setFollowLoading(false);
+  };
+
+  const startConversation = async () => {
+    if (!user || messageLoading) return;
+    setMessageLoading(true);
+    setActionError(null);
+    try {
+      const [blockedByMe, blockedMe] = await Promise.all([
+        supabase.from("blocks").select("id").eq("blocker_id", user.id).eq("blocked_id", id).maybeSingle(),
+        supabase.from("blocks").select("id").eq("blocker_id", id).eq("blocked_id", user.id).maybeSingle(),
+      ]);
+      if (blockedByMe.error || blockedMe.error) throw new Error("Could not verify messaging permissions.");
+      if (blockedByMe.data || blockedMe.data) throw new Error("Messaging is unavailable between these accounts.");
+
+      const { data: mine, error: mineError } = await supabase
+        .from("conversation_participants")
+        .select("conversation_id")
+        .eq("user_id", user.id);
+      if (mineError) throw mineError;
+
+      const conversationIds = (mine || []).map((row) => row.conversation_id);
+      if (conversationIds.length > 0) {
+        const { data: existing, error: existingError } = await supabase
+          .from("conversation_participants")
+          .select("conversation_id")
+          .eq("user_id", id)
+          .in("conversation_id", conversationIds)
+          .limit(1);
+        if (existingError) throw existingError;
+        if (existing?.[0]?.conversation_id) {
+          setLocation(`/messages/${existing[0].conversation_id}`);
+          return;
+        }
+      }
+
+      const { data: conversation, error: createError } = await supabase
+        .from("conversations")
+        .insert({ created_by: user.id })
+        .select("id")
+        .single();
+      if (createError || !conversation) throw createError || new Error("Could not create conversation.");
+
+      const { error: participantsError } = await supabase.from("conversation_participants").insert([
+        { conversation_id: conversation.id, user_id: user.id },
+        { conversation_id: conversation.id, user_id: id },
+      ]);
+      if (participantsError) throw participantsError;
+
+      setLocation(`/messages/${conversation.id}`);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not start conversation.");
+    } finally {
+      setMessageLoading(false);
+    }
   };
 
   if (loading) {
@@ -145,21 +195,32 @@ export default function UserProfilePage({ id }: { id: string }) {
             className="h-20 w-20 rounded-full object-cover border-2 border-blue-500"
           />
           {user && (
-            <button
-              type="button"
-              onClick={toggleFollow}
-              disabled={followLoading}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                isFollowing
-                  ? "border border-gray-200 text-gray-600 hover:bg-gray-50"
-                  : "bg-blue-600 text-white hover:bg-blue-700"
-              }`}
-            >
-              {isFollowing ? "Following" : "Follow"}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={toggleFollow}
+                disabled={followLoading}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                  isFollowing
+                    ? "border border-gray-200 text-gray-600 hover:bg-gray-50"
+                    : "bg-blue-600 text-white hover:bg-blue-700"
+                }`}
+              >
+                {followLoading ? "Saving…" : isFollowing ? "Following" : "Follow"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void startConversation()}
+                disabled={messageLoading}
+                className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                {messageLoading ? "Opening…" : "Message"}
+              </button>
+            </div>
           )}
         </div>
 
+        {actionError && <p role="alert" className="mt-3 text-xs text-red-600">{actionError}</p>}
         <h1 className="text-xl font-bold mt-4 text-gray-900">{profile.display_name}</h1>
         <p className="text-sm text-gray-500">@{profile.username}</p>
         {profile.bio && <p className="text-sm mt-2 leading-relaxed text-gray-700">{profile.bio}</p>}
