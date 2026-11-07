@@ -1,24 +1,691 @@
 package com.skillect.app
 
-// TEMPORARY: full source restored in next commit via CI if this is incomplete.
-// Please see artifacts MainActivity_ENHANCED.kt for the full enhanced version.
-
 import android.os.Bundle
+import android.net.Uri
+import android.widget.VideoView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Text
+import androidx.compose.ui.viewinterop.AndroidView
+import coil.compose.AsyncImage
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.URLEncoder
+
+private val Blue = Color(0xFF00C878)
+private val Ink = Color(0xFFF2F2F2)
+private val SkillectBlack = Color(0xFF050509)
+private val MutedNav = Color(0xFF77748C)
+private val client = OkHttpClient()
+private const val URL = BuildConfig.SUPABASE_URL
+private const val KEY = BuildConfig.SUPABASE_KEY
+
+data class Post(val id: String, val authorId: String, val body: String, val author: String, val handle: String, val image: String?, val mediaUrl: String?, val mediaType: String, val likes: Int, val comments: Int)
+data class SimpleItem(val id: String, val title: String, val detail: String)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val prefs = getSharedPreferences("skillect-session", MODE_PRIVATE)
         setContent {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Skillect is updating. Reinstall the signed APK from GitHub Actions after the restore build.")
+            MaterialTheme(colorScheme = darkColorScheme(primary = Blue, background = SkillectBlack, surface = SkillectBlack)) {
+                SkillectApp(
+                    initialToken = prefs.getString("token", null),
+                    onToken = { token -> prefs.edit().putString("token", token).apply() },
+                    onSignOut = { prefs.edit().clear().apply() }
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSignOut: () -> Unit) {
+    var token by remember { mutableStateOf(initialToken) }
+    var userId by remember { mutableStateOf<String?>(null) }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var onboarded by remember { mutableStateOf(true) }
+    var dateOfBirth by remember { mutableStateOf("") }
+    var communityName by remember { mutableStateOf("") }
+    var communityDesc by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var posts by remember { mutableStateOf<List<Post>>(emptyList()) }
+    var likedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var savedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var tab by remember { mutableStateOf("Feed") }
+    var refresh by remember { mutableIntStateOf(0) }
+    var createText by remember { mutableStateOf("") }
+    var searchText by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
+    var projects by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
+    var communities by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
+    var displayName by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var bio by remember { mutableStateOf("") }
+    var projectTitle by remember { mutableStateOf("") }
+    var projectDescription by remember { mutableStateOf("") }
+    var notifications by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
+    var showCommentsFor by remember { mutableStateOf<String?>(null) }
+    var comments by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
+    var commentText by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+
+    suspend fun loadUser() {
+        val active = token ?: return
+        try {
+            val u = api("GET", "/auth/v1/user", active)
+            userId = u.optString("id").takeIf { it.isNotBlank() }
+            val id = userId ?: return
+            val arr = apiArray("/rest/v1/profiles?select=display_name,username,bio,onboarded,date_of_birth&id=eq.$id&limit=1", active)
+            if (arr.length() > 0) {
+                val p = arr.getJSONObject(0)
+                displayName = p.optString("display_name")
+                username = p.optString("username")
+                bio = p.optString("bio")
+                onboarded = p.optBoolean("onboarded", true)
+                if (!p.isNull("date_of_birth")) dateOfBirth = p.optString("date_of_birth")
+            } else {
+                onboarded = false
+            }
+        } catch (e: Exception) { error = e.message }
+    }
+
+    suspend fun loadFeed() {
+        val active = token ?: return
+        try {
+            val arr = apiArray("/rest/v1/posts?select=id,author_id,content,image_url,media_type,likes_count,comments_count,profiles(display_name,username),media_assets(public_url,media_type,status)&moderation_hidden=eq.false&order=created_at.desc&limit=50", active)
+            posts = (0 until arr.length()).map { i ->
+                val p = arr.getJSONObject(i); val profile = p.optJSONObject("profiles") ?: JSONObject()
+                Post(p.optString("id"), p.optString("author_id"), p.optString("content"), profile.optString("display_name", "Skillect member"), profile.optString("username", "member"), p.optString("image_url").takeIf { it.isNotBlank() }, p.optJSONArray("media_assets")?.let { assets -> (0 until assets.length()).map { assets.getJSONObject(it) }.firstOrNull { it.optString("status") == "approved" }?.optString("public_url")?.takeIf { it.isNotBlank() } }, p.optString("media_type", "text"), p.optInt("likes_count"), p.optInt("comments_count"))
+            }
+            val me = userId
+            if (me != null) {
+                val likes = apiArray("/rest/v1/post_likes?select=post_id&user_id=eq.$me", active)
+                likedIds = (0 until likes.length()).map { likes.getJSONObject(it).optString("post_id") }.toSet()
+                val saves = apiArray("/rest/v1/saved_posts?select=post_id&user_id=eq.$me", active)
+                savedIds = (0 until saves.length()).map { saves.getJSONObject(it).optString("post_id") }.toSet()
+            }
+        } catch (e: Exception) { error = e.message ?: "Could not load feed" }
+    }
+
+    suspend fun loadProjects() {
+        val active = token ?: return
+        try {
+            val arr = apiArray("/rest/v1/projects?select=id,title,description,status&order=created_at.desc&limit=40", active)
+            projects = (0 until arr.length()).map { val p=arr.getJSONObject(it); SimpleItem(p.optString("id"),p.optString("title"),p.optString("description")) }
+        } catch (e: Exception) { error=e.message }
+    }
+
+    suspend fun loadCommunities() {
+        val active = token ?: return
+        try {
+            val arr = apiArray("/rest/v1/communities?select=id,name,description,member_count&order=created_at.desc&limit=40", active)
+            communities = (0 until arr.length()).map { val p=arr.getJSONObject(it); SimpleItem(p.optString("id"),p.optString("name"),p.optString("description")) }
+        } catch (e: Exception) { error=e.message }
+    }
+
+
+    suspend fun createProject() {
+        val active = token ?: return
+        val me = userId ?: return
+        if (projectTitle.isBlank() || projectDescription.isBlank()) return
+        try {
+            api("POST", "/rest/v1/projects", active, JSONObject().put("author_id", me).put("title", projectTitle.trim()).put("description", projectDescription.trim()).put("status", "in_progress"))
+            projectTitle = ""
+            projectDescription = ""
+            loadProjects()
+        } catch (e: Exception) { error = e.message }
+    }
+
+    suspend fun joinCommunity(id: String) {
+        val active = token ?: return
+        val me = userId ?: return
+        try {
+            api("POST", "/rest/v1/community_members", active, JSONObject().put("community_id", id).put("user_id", me).put("role", "member").put("status", "active"))
+            error = null
+            loadCommunities()
+        } catch (e: Exception) { error = e.message }
+    }
+
+    suspend fun createCommunity() {
+        val active = token ?: return
+        val me = userId ?: return
+        val name = communityName.trim()
+        if (name.length < 2) { error = "Community name must be at least 2 characters"; return }
+        try {
+            val slugBase = name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').take(40).ifBlank { "community" }
+            val slug = slugBase + "-" + me.take(6)
+            api(
+                "POST",
+                "/rest/v1/communities",
+                active,
+                JSONObject()
+                    .put("name", name)
+                    .put("slug", slug)
+                    .put("description", communityDesc.trim())
+                    .put("created_by", me)
+                    .put("is_private", false)
+            )
+            communityName = ""
+            communityDesc = ""
+            loadCommunities()
+            error = null
+        } catch (e: Exception) { error = e.message }
+    }
+
+    suspend fun completeOnboarding() {
+        val active = token ?: return
+        val me = userId ?: return
+        busy = true
+        error = null
+        try {
+            api(
+                "PATCH",
+                "/rest/v1/profiles?id=eq.$me",
+                active,
+                JSONObject()
+                    .put("display_name", displayName.trim().ifBlank { "Skillect member" })
+                    .put("username", username.trim().ifBlank { "user_" + me.take(8) })
+                    .put("bio", bio)
+                    .put("date_of_birth", dateOfBirth.trim())
+                    .put("onboarded", true)
+            )
+            onboarded = true
+        } catch (e: Exception) { error = e.message }
+        busy = false
+    }
+
+    suspend fun updateProfile() {
+        val active = token ?: return
+        val me = userId ?: return
+        try {
+            api("PATCH", "/rest/v1/profiles?id=eq.$me", active, JSONObject().put("display_name", displayName).put("bio", bio))
+            loadUser()
+        } catch (e: Exception) { error = e.message }
+    }
+
+    suspend fun loadNotifications() {
+        val active = token ?: return
+        val me = userId ?: return
+        try {
+            val arr = apiArray("/rest/v1/notifications?select=id,type,message&user_id=eq.$me&order=created_at.desc&limit=50", active)
+            notifications = (0 until arr.length()).map { val p = arr.getJSONObject(it); SimpleItem(p.optString("id"), p.optString("type"), p.optString("message")) }
+        } catch (e: Exception) { error = e.message }
+    }
+
+    suspend fun markNotificationRead(id: String) {
+        val active = token ?: return
+        try {
+            api("PATCH", "/rest/v1/notifications?id=eq.$id", active, JSONObject().put("read", true))
+            loadNotifications()
+        } catch (e: Exception) { error = e.message }
+    }
+
+
+    suspend fun reportPost(post: Post) {
+        val active=token ?: return
+        val me=userId ?: return
+        try {
+            api("POST","/rest/v1/reports",active,JSONObject().put("reporter_id",me).put("target_type","post").put("target_id",post.id).put("reason","inappropriate_content"))
+            error="Report submitted for review"
+        } catch(e:Exception){ error=e.message }
+    }
+
+    suspend fun blockUser(targetId:String) {
+        val active=token ?: return
+        val me=userId ?: return
+        if(targetId==me) return
+        try {
+            api("POST","/rest/v1/blocks",active,JSONObject().put("blocker_id",me).put("blocked_id",targetId))
+            results=results.filterNot{it.id==targetId}
+        } catch(e:Exception){ error=e.message }
+    }
+
+    suspend fun searchPeople() {
+        val active=token ?: return
+        if (searchText.isBlank()) { results=emptyList(); return }
+        try {
+            val q=URLEncoder.encode(searchText.trim(), "UTF-8")
+            val arr=apiArray("/rest/v1/profiles?select=id,display_name,username,bio&or=(username.ilike.%25$q%25,display_name.ilike.%25$q%25)&limit=30",active)
+            results=(0 until arr.length()).map { val p=arr.getJSONObject(it); SimpleItem(p.optString("id"),p.optString("display_name")+"  @"+p.optString("username"),p.optString("bio")) }
+        } catch(e:Exception){ error=e.message }
+    }
+
+    LaunchedEffect(token, refresh) {
+        if (token != null) {
+            loadUser()
+            loadFeed()
+            loadProjects()
+            loadCommunities()
+        }
+    }
+
+    suspend fun createPost() {
+        val active = token ?: return
+        if (createText.isBlank()) return
+        busy = true
+        try {
+            val body = JSONObject().put("type", "post").put("content", createText.trim()).put("tags", JSONArray())
+            api("POST", "/functions/v1/moderate-text", active, body)
+            createText = ""
+            tab = "Feed"
+            loadFeed()
+            error = null
+        } catch (e: Exception) {
+            error = e.message
+        }
+        busy = false
+    }
+
+    suspend fun toggleLike(post:Post) {
+        val active=token ?: return
+        val me=userId ?: return
+        try {
+            if(likedIds.contains(post.id)) {
+                api("DELETE","/rest/v1/post_likes?post_id=eq.${post.id}&user_id=eq.$me",active)
+                likedIds=likedIds-post.id
+            } else {
+                api("POST","/rest/v1/post_likes",active,JSONObject().put("post_id",post.id).put("user_id",me))
+                likedIds=likedIds+post.id
+            }
+            loadFeed()
+        } catch(e:Exception){ error=e.message }
+    }
+
+    suspend fun toggleSave(post:Post) {
+        val active=token ?: return
+        val me=userId ?: return
+        try {
+            if(savedIds.contains(post.id)) {
+                api("DELETE","/rest/v1/saved_posts?post_id=eq.${post.id}&user_id=eq.$me",active)
+                savedIds=savedIds-post.id
+            } else {
+                api("POST","/rest/v1/saved_posts",active,JSONObject().put("post_id",post.id).put("user_id",me))
+                savedIds=savedIds+post.id
+            }
+        } catch(e:Exception){ error=e.message }
+    }
+
+    suspend fun loadComments(postId:String) {
+        val active=token ?: return
+        try {
+            val arr=apiArray("/rest/v1/comments?select=id,content,profiles(display_name)&post_id=eq.$postId&order=created_at.asc&limit=100",active)
+            comments=(0 until arr.length()).map { val p=arr.getJSONObject(it); val profile=p.optJSONObject("profiles")?:JSONObject(); SimpleItem(p.optString("id"),profile.optString("display_name","Member"),p.optString("content")) }
+        } catch(e:Exception){ error=e.message }
+    }
+
+    suspend fun addComment(postId:String) {
+        val active=token ?: return
+        val me=userId ?: return
+        if(commentText.isBlank()) return
+        try {
+            api("POST","/rest/v1/comments",active,JSONObject().put("post_id",postId).put("author_id",me).put("content",commentText.trim()))
+            commentText=""
+            loadComments(postId)
+            loadFeed()
+        } catch(e:Exception){ error=e.message }
+    }
+
+    if (token == null) {
+        AuthGate(
+            busy = busy,
+            error = error,
+            onClearError = { error = null },
+            onSignedIn = { newToken -> token = newToken; onToken(newToken) },
+            apiPost = { path, tok, body -> api("POST", path, tok, body) }
+        )
+    } else if (!onboarded) {
+        OnboardingGate(
+            displayName = displayName,
+            onDisplayName = { displayName = it },
+            username = username,
+            onUsername = { username = it },
+            bio = bio,
+            onBio = { bio = it },
+            dateOfBirth = dateOfBirth,
+            onDateOfBirth = { dateOfBirth = it },
+            busy = busy,
+            error = error,
+            onFinish = { scope.launch { completeOnboarding() } }
+        )
+    } else {
+        Scaffold(
+            topBar={ Row(Modifier.fillMaxWidth().height(72.dp).background(SkillectBlack).padding(horizontal=22.dp),verticalAlignment=Alignment.CenterVertically) {
+                Box(Modifier.size(42.dp).background(Color(0xFF101018),RoundedCornerShape(12.dp)),contentAlignment=Alignment.Center) {
+                    Text("s",color=Blue,fontSize=34.sp,fontWeight=FontWeight.Bold)
+                }
+                Text("Skillect",color=Blue,fontWeight=FontWeight.ExtraBold,fontSize=25.sp,modifier=Modifier.padding(start=14.dp))
+            }},
+            bottomBar={
+                NavigationBar(containerColor=SkillectBlack,contentColor=MutedNav,tonalElevation=0.dp) {
+                    listOf("Feed","Explore","Communities","Create","Messages","Profile").forEach { item ->
+                        NavigationBarItem(
+                            selected=tab==item,
+                            onClick={
+                                tab=item
+                                if(item=="Communities") scope.launch { loadCommunities() }
+                            },
+                            icon={Text(when(item){"Feed"->"⌂";"Explore"->"◈";"Communities"->"♧";"Create"->"⊞";"Messages"->"○";else->"♙"},fontSize=25.sp)},
+                            label={Text(item,fontSize=10.sp)},
+                            colors=NavigationBarItemDefaults.colors(selectedIconColor=Blue,selectedTextColor=Blue,unselectedIconColor=MutedNav,unselectedTextColor=MutedNav,indicatorColor=SkillectBlack)
+                        )
+                    }
+                }
+            }
+        ) { padding ->
+            Column(Modifier.fillMaxSize().background(SkillectBlack).padding(padding)) {
+                error?.let { Text(it,color=Color.Red,modifier=Modifier.padding(horizontal=16.dp,vertical=6.dp)) }
+                when(tab) {
+                    "Feed" -> {
+                        Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=10.dp),horizontalArrangement=Arrangement.SpaceBetween) {
+                            Text("Your learning feed",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
+                            TextButton(onClick={scope.launch{loadFeed()}}){Text("Refresh")}
+                        }
+                        if(posts.isEmpty()) Spacer(Modifier.fillMaxSize())
+                        else LazyColumn(contentPadding=PaddingValues(14.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                            items(posts,key={it.id}) { post ->
+                                Card(colors=CardDefaults.cardColors(containerColor=Color(0xFF15151D)),shape=RoundedCornerShape(18.dp),modifier=Modifier.fillMaxWidth()) {
+                                    Column(Modifier.padding(18.dp)) {
+                                        Text(post.author,fontWeight=FontWeight.Bold,color=Ink)
+                                        Text("@${post.handle}",color=Color.Gray,fontSize=12.sp)
+                                        Text(post.body,color=Ink,modifier=Modifier.padding(top=12.dp),lineHeight=22.sp)
+                                        post.mediaUrl?.let { media -> if (post.mediaType == "video") { AndroidView(factory = { ctx -> VideoView(ctx).apply { setVideoURI(Uri.parse(media)); setOnPreparedListener { it.isLooping = false; start() } } }, modifier = Modifier.fillMaxWidth().height(240.dp).padding(top = 10.dp)) } else { AsyncImage(model = media, contentDescription = "Post image", modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(top = 10.dp)) } } ?: post.image?.let { AsyncImage(model = it, contentDescription = "Post image", modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(top = 10.dp)) }
+                                        Row(Modifier.fillMaxWidth().padding(top=10.dp),horizontalArrangement=Arrangement.SpaceBetween) {
+                                            TextButton(onClick={scope.launch{toggleLike(post)}}){Text((if(likedIds.contains(post.id)) "♥ " else "♡ ")+post.likes)}
+                                            TextButton(onClick={scope.launch{showCommentsFor=post.id;loadComments(post.id)}}){Text("Comments ${post.comments}")}
+                                            TextButton(onClick={scope.launch{toggleSave(post)}}){Text(if(savedIds.contains(post.id)) "Saved" else "Save")}
+                                            TextButton(onClick={scope.launch{reportPost(post)}}){Text("Report")}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    "Explore" -> Column(Modifier.fillMaxSize().padding(16.dp)) {
+                        Text("Find your people",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
+                        OutlinedTextField(searchText,{searchText=it},label={Text("Search by name or username")},modifier=Modifier.fillMaxWidth())
+                        Button(onClick={scope.launch{searchPeople()}},modifier=Modifier.padding(top=8.dp)){Text("Search")}
+                        LazyColumn { items(results){ item -> Card(Modifier.fillMaxWidth().padding(vertical=5.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);TextButton(onClick={scope.launch{blockUser(item.id)}}){Text("Block")}}} } }
+                    }
+                    "Create" -> {
+                        val activeToken = token
+                        val activeUserId = userId
+                        if (activeToken != null && activeUserId != null) {
+                            ModeratedCreatePostScreen(activeToken, activeUserId) {
+                                tab = "Feed"
+                                scope.launch { loadFeed() }
+                            }
+                        } else {
+                            Text("Preparing your account…", color = Ink, modifier = Modifier.padding(20.dp))
+                        }
+                    }
+                    "Projects" -> Column(Modifier.fillMaxSize().padding(16.dp)) {
+                        Text("Projects & builds",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
+                        OutlinedTextField(projectTitle,{projectTitle=it},label={Text("Project title")},modifier=Modifier.fillMaxWidth())
+                        OutlinedTextField(projectDescription,{projectDescription=it},label={Text("What are you building?")},modifier=Modifier.fillMaxWidth(),maxLines=4)
+                        Button(onClick={scope.launch{createProject()}},enabled=projectTitle.isNotBlank()&&projectDescription.isNotBlank()){Text("Add project")}
+                        LazyColumn { items(projects){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray)}} } }
+                        TextButton(onClick={scope.launch{loadCommunities();tab="Communities"}}){Text("Explore communities")}
+                    }
+                    "Profile" -> Column(Modifier.fillMaxSize().padding(20.dp)) {
+                        Text(displayName.ifBlank{"Your profile"},fontSize=25.sp,fontWeight=FontWeight.Bold,color=Ink)
+                        Text("@$username",color=Color.Gray)
+                        OutlinedTextField(displayName,{displayName=it},label={Text("Display name")},modifier=Modifier.fillMaxWidth())
+                        OutlinedTextField(bio,{bio=it},label={Text("Bio")},modifier=Modifier.fillMaxWidth(),maxLines=4)
+                        Button(onClick={scope.launch{updateProfile()}}){Text("Save profile")}
+                        Text("Posts: ${posts.count{it.authorId==userId}}",modifier=Modifier.padding(top=14.dp))
+                        TextButton(onClick={scope.launch{loadFeed()}}){Text("Refresh profile")}
+                    }
+                    "Messages" -> MessagesScreen(token ?: return@Column, userId ?: return@Column)
+                    "Communities" -> LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
+                        item {
+                            Text("Communities",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
+                            CommunityCreateForm(
+                                name = communityName,
+                                onName = { communityName = it },
+                                description = communityDesc,
+                                onDescription = { communityDesc = it },
+                                enabled = !busy,
+                                onCreate = { scope.launch { createCommunity() } }
+                            )
+                            Text("Discover", fontWeight=FontWeight.Bold, color=Ink, modifier=Modifier.padding(top=8.dp, bottom=6.dp))
+                        }
+                        items(communities){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp), colors=CardDefaults.cardColors(containerColor=Color(0xFF15151D))){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold,color=Ink);Text(item.detail,color=Color.Gray);Button(onClick={scope.launch{joinCommunity(item.id)}},modifier=Modifier.padding(top=6.dp)){Text("Join")}}} }
+                    }
+                    "Notifications" -> LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
+                        item { Text("Notifications",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink) }
+                        item { TextButton(onClick={scope.launch{loadNotifications()}}){Text("Refresh")} }
+                        items(notifications){ item -> Card(Modifier.fillMaxWidth().padding(vertical=5.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);TextButton(onClick={scope.launch{markNotificationRead(item.id)}}){Text("Mark read")}}} }
+                    }
+                }
+            }
+        }
+    }
+
+    showCommentsFor?.let { postId ->
+        AlertDialog(
+            onDismissRequest={showCommentsFor=null},
+            title={Text("Comments")},
+            text={
+                Column {
+                    LazyColumn(Modifier.heightIn(max=280.dp)) {
+                        items(comments){ c -> Column(Modifier.padding(vertical=5.dp)){Text(c.title,fontWeight=FontWeight.Bold);Text(c.detail)} }
+                    }
+                    OutlinedTextField(commentText,{commentText=it},label={Text("Write a comment")},modifier=Modifier.fillMaxWidth())
+                }
+            },
+            confirmButton={TextButton(onClick={scope.launch{addComment(postId)}}){Text("Send")}},
+            dismissButton={TextButton(onClick={showCommentsFor=null}){Text("Close")}}
+        )
+    }
+}
+
+
+
+@Composable
+private fun MessagesScreen(token: String, userId: String) {
+    var conversations by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
+    var activeConversation by remember { mutableStateOf<String?>(null) }
+    var activeTitle by remember { mutableStateOf("") }
+    var messages by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
+    var messageText by remember { mutableStateOf("") }
+    var newUsername by remember { mutableStateOf("") }
+    var newUserId by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    var errorText by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    suspend fun loadInbox() {
+        loading = true
+        try {
+            val memberships = apiArray("/rest/v1/conversation_participants?select=conversation_id&user_id=eq.$userId", token)
+            val items = mutableListOf<SimpleItem>()
+            for (i in 0 until memberships.length()) {
+                val conversationId = memberships.getJSONObject(i).optString("conversation_id")
+                if (conversationId.isBlank()) continue
+                val people = apiArray("/rest/v1/conversation_participants?select=user_id,profiles(display_name,username)&conversation_id=eq.$conversationId", token)
+                var title = "Conversation"
+                for (j in 0 until people.length()) {
+                    val person = people.getJSONObject(j)
+                    if (person.optString("user_id") != userId) {
+                        val profile = person.optJSONObject("profiles") ?: JSONObject()
+                        title = profile.optString("display_name").ifBlank { profile.optString("username").ifBlank { "Skillect member" } }
+                        break
+                    }
+                }
+                val latest = apiArray("/rest/v1/messages?select=content&conversation_id=eq.$conversationId&order=created_at.desc&limit=1", token)
+                val preview = if (latest.length() > 0) latest.getJSONObject(0).optString("content") else "Start the conversation"
+                items.add(SimpleItem(conversationId, title, preview))
+            }
+            conversations = items
+            errorText = null
+        } catch (e: Exception) {
+            errorText = e.message
+        } finally {
+            loading = false
+        }
+    }
+
+    suspend fun openConversation(id: String, title: String) {
+        activeConversation = id
+        activeTitle = title
+        try {
+            val arr = apiArray("/rest/v1/messages?select=id,content,created_at,sender_id&conversation_id=eq.$id&order=created_at.asc&limit=200", token)
+            messages = (0 until arr.length()).map { i ->
+                val item = arr.getJSONObject(i)
+                SimpleItem(item.optString("id"), if (item.optString("sender_id") == userId) "You" else title, item.optString("content"))
+            }
+        } catch (e: Exception) {
+            errorText = e.message
+        }
+    }
+
+    suspend fun sendMessage() {
+        val id = activeConversation ?: return
+        val body = messageText.trim()
+        if (body.isEmpty()) return
+        try {
+            api("POST", "/rest/v1/messages", token, JSONObject().put("conversation_id", id).put("sender_id", userId).put("content", body))
+            messageText = ""
+            openConversation(id, activeTitle)
+            loadInbox()
+        } catch (e: Exception) {
+            errorText = e.message
+        }
+    }
+
+    suspend fun findUser() {
+        if (newUsername.isBlank()) return
+        try {
+            val encoded = URLEncoder.encode(newUsername.trim().removePrefix("@"), "UTF-8")
+            val found = apiArray("/rest/v1/profiles?select=id,display_name,username&username=ilike.$encoded&limit=1", token)
+            if (found.length() == 0) {
+                errorText = "No account found with that username"
+                newUserId = null
+            } else {
+                newUserId = found.getJSONObject(0).optString("id")
+                errorText = "Account found. Tap Start conversation."
+            }
+        } catch (e: Exception) {
+            errorText = e.message
+        }
+    }
+
+    suspend fun startConversation() {
+        val target = newUserId ?: return
+        if (target == userId) {
+            errorText = "You cannot message yourself"
+            return
+        }
+        try {
+            val created = api("POST", "/rest/v1/conversations", token, JSONObject().put("created_by", userId))
+            val id = created.optString("id")
+            if (id.isBlank()) throw IllegalStateException("Could not create conversation")
+            api("POST", "/rest/v1/conversation_participants", token, JSONObject().put("conversation_id", id).put("user_id", userId))
+            api("POST", "/rest/v1/conversation_participants", token, JSONObject().put("conversation_id", id).put("user_id", target))
+            newUsername = ""
+            newUserId = null
+            loadInbox()
+            openConversation(id, "New conversation")
+        } catch (e: Exception) {
+            errorText = e.message
+        }
+    }
+
+    LaunchedEffect(token, userId) { loadInbox() }
+
+    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(if (activeConversation == null) "Messages" else activeTitle, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Ink)
+            if (activeConversation != null) TextButton(onClick = { activeConversation = null; scope.launch { loadInbox() } }) { Text("Back") }
+            else TextButton(onClick = { scope.launch { loadInbox() } }) { Text("Refresh") }
+        }
+        errorText?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
+        if (activeConversation == null) {
+            OutlinedTextField(newUsername, { newUsername = it; newUserId = null }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Start a chat by username") })
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { scope.launch { findUser() } }, enabled = newUsername.isNotBlank()) { Text("Find person") }
+                Button(onClick = { scope.launch { startConversation() } }, enabled = newUserId != null) { Text("Start conversation") }
+            }
+            if (loading) CircularProgressIndicator()
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(conversations, key = { it.id }) { item ->
+                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF15151D)), modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.fillMaxWidth().clickable { scope.launch { openConversation(item.id, item.title) } }.padding(14.dp)) {
+                            Text(item.title, color = Ink, fontWeight = FontWeight.Bold)
+                            Text(item.detail, color = Color.LightGray, maxLines = 1)
+                        }
+                    }
+                }
+            }
+        } else {
+            LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(messages, key = { it.id }) { item ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (item.title == "You") Arrangement.End else Arrangement.Start) {
+                        Surface(color = if (item.title == "You") Color(0xFF164B3A) else Color(0xFF20202A), shape = RoundedCornerShape(16.dp)) {
+                            Column(Modifier.widthIn(max = 280.dp).padding(12.dp)) {
+                                Text(item.title, color = Color(0xFF80DDB5), fontSize = 11.sp)
+                                Text(item.detail, color = Ink)
+                            }
+                        }
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(messageText, { messageText = it }, modifier = Modifier.weight(1f), placeholder = { Text("Write a message") }, maxLines = 3)
+                Spacer(Modifier.width(8.dp))
+                Button(onClick = { scope.launch { sendMessage() } }, enabled = messageText.isNotBlank()) { Text("Send") }
+            }
+        }
+    }
+}
+
+private suspend fun api(method:String,path:String,token:String?,json:JSONObject?=null):JSONObject = withContext(Dispatchers.IO) {
+    val builder=Request.Builder().url(URL+path).addHeader("apikey",KEY).addHeader("Content-Type","application/json")
+    if(token!=null) builder.addHeader("Authorization","Bearer $token")
+    val body=json?.toString()?.toRequestBody("application/json".toMediaType())
+    when(method) {
+        "GET" -> builder.get()
+        "POST" -> builder.post(body ?: "{}".toRequestBody("application/json".toMediaType())).addHeader("Prefer","return=representation")
+        "PATCH" -> builder.patch(body ?: "{}".toRequestBody("application/json".toMediaType()))
+        "DELETE" -> builder.delete()
+        else -> builder.get()
+    }
+    client.newCall(builder.build()).execute().use { response ->
+        val text=response.body?.string().orEmpty()
+        if(!response.isSuccessful) throw IllegalStateException(try{JSONObject(text).optString("message",JSONObject(text).optString("msg","Request failed (${response.code})"))}catch(_:Exception){"Request failed (${response.code})"})
+        if(text.isBlank()) JSONObject() else try{JSONObject(text)}catch(_:Exception){JSONObject().put("data",JSONArray(text))}
+    }
+}
+
+private suspend fun apiArray(path:String,token:String):JSONArray = withContext(Dispatchers.IO) {
+    val request=Request.Builder().url(URL+path).addHeader("apikey",KEY).addHeader("Authorization","Bearer $token").build()
+    client.newCall(request).execute().use { response ->
+        val text=response.body?.string().orEmpty()
+        if(!response.isSuccessful) throw IllegalStateException("Request failed (${response.code}): $text")
+        JSONArray(text)
     }
 }
