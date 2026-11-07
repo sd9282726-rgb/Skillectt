@@ -49,10 +49,11 @@ using (
   )
 );
 
+drop policy if exists "Authenticated can create communities" on public.communities;
 drop policy if exists "Authenticated create communities" on public.communities;
 create policy "Authenticated create communities"
 on public.communities for insert to authenticated
-with check (auth.uid() = created_by);
+with check (auth.uid() = created_by and public.is_profile_onboarded());
 
 drop policy if exists "Owners update communities" on public.communities;
 create policy "Owners update communities"
@@ -87,11 +88,13 @@ using (
   )
 );
 
+drop policy if exists "Users can join communities" on public.community_members;
 drop policy if exists "Users join communities" on public.community_members;
 create policy "Users join communities"
 on public.community_members for insert to authenticated
 with check (
   auth.uid() = user_id
+  and public.is_profile_onboarded()
   and (
     exists (
       select 1 from public.communities c
