@@ -52,7 +52,7 @@ jobs:
         with:
           gradle-version: "8.10.2"
       - name: Build debug APK
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_type == 'debug' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type == 'debug' }}
         working-directory: native/android
         run: gradle --no-daemon :app:assembleDebug
       - name: Upload debug APK
@@ -64,7 +64,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Verify signing secrets
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type == 'signed-release' }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_type == 'signed-release' }}
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
