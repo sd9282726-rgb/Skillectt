@@ -46,7 +46,6 @@ Deno.serve(async (request: Request) => {
   });
   if (!publicUpload.ok) return json(503, { error: "Could not publish the video file" });
   const publicUrl = base + "/storage/v1/object/public/post-media/" + storagePath;
-  const publicUrl = base + "/storage/v1/object/public/post-media/" + storagePath;
   const callbackToken = crypto.randomUUID() + crypto.randomUUID();
   const assetResponse = await fetch(base + "/rest/v1/media_assets", {
     method: "POST",
