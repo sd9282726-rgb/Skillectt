@@ -475,9 +475,10 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         NavigationBarItem(
                             selected=tab==item,
                             onClick={
-                                if (item == "Create" && !requireAccount()) return@NavigationBarItem
-                                tab=item
-                                if(item=="Communities") scope.launch { loadCommunities() }
+                                if (item != "Create" || requireAccount()) {
+                                    tab=item
+                                    if(item=="Communities") scope.launch { loadCommunities() }
+                                }
                             },
                             icon={Text(when(item){"Home"->"⌂";"Explore"->"⌕";"Communities"->"♧";"Create"->"＋";else->"♙"},fontSize=25.sp)},
                             label={Text(item,fontSize=10.sp)},
