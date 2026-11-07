@@ -20,6 +20,7 @@ import java.util.GregorianCalendar
 private val AuthBlue = Color(0xFF72B7FF)
 private val AuthInk = Color(0xFFF2F2F2)
 private val AuthBg = Color(0xFF07172B)
+private val AuthMuted = Color(0xFF94A3B8)
 
 internal fun isAtLeast16(value: String): Boolean {
     return try {
@@ -76,13 +77,13 @@ fun AuthGate(
             Button(
                 onClick = { mode = "signin"; localError = null; onClearError() },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (mode == "signin") AuthBlue else Color(0xFF333344)
+                    containerColor = if (mode == "signin") AuthBlue else Color(0xFF17314F)
                 )
             ) { Text("Sign in") }
             Button(
                 onClick = { mode = "signup"; localError = null; onClearError() },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (mode == "signup") AuthBlue else Color(0xFF333344)
+                    containerColor = if (mode == "signup") AuthBlue else Color(0xFF17314F)
                 )
             ) { Text("Sign up") }
         }
@@ -106,7 +107,7 @@ fun AuthGate(
             OutlinedTextField(dob, { dob = it }, label = { Text("Date of birth (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             Text(
                 "Skillect is for people aged 16 and above. Your birth date stays private.",
-                color = Color.Gray,
+                color = AuthMuted,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 6.dp)
             )
@@ -199,7 +200,7 @@ fun OnboardingGate(
     var step by remember { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize().background(AuthBg).padding(28.dp)) {
         Text("Finish your profile", color = AuthBlue, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-        Text("Step ${step + 1} of 3", color = Color.Gray, modifier = Modifier.padding(bottom = 16.dp))
+        Text("Step ${step + 1} of 3", color = AuthMuted, modifier = Modifier.padding(bottom = 16.dp))
         when (step) {
             0 -> {
                 OutlinedTextField(displayName, onDisplayName, label = { Text("Display name") }, modifier = Modifier.fillMaxWidth())
@@ -208,7 +209,7 @@ fun OnboardingGate(
             }
             1 -> {
                 OutlinedTextField(dateOfBirth, onDateOfBirth, label = { Text("Date of birth YYYY-MM-DD") }, modifier = Modifier.fillMaxWidth())
-                Text("Required for age verification (16+). Never shown publicly.", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                Text("Required for age verification (16+). Never shown publicly.", color = AuthMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
             }
             else -> {
                 OutlinedTextField(bio, onBio, label = { Text("Short bio") }, modifier = Modifier.fillMaxWidth().height(120.dp))
