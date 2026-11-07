@@ -28,28 +28,25 @@ export default function PostCard({ post }: { post: PostCardPost }) {
   const [liked, setLiked] = useState(!!post.likedByMe);
   const [likeCount, setLikeCount] = useState(post.likesCount || 0);
   const [liking, setLiking] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const toggleLike = async () => {
     if (!user || liking) return;
     setLiking(true);
 
-    if (liked) {
-      await supabase
-        .from("post_likes")
-        .delete()
-        .eq("post_id", post.id)
-        .eq("user_id", user.id);
-      setLiked(false);
-      setLikeCount((c) => Math.max(0, c - 1));
-    } else {
-      await supabase.from("post_likes").insert({
-        post_id: post.id,
-        user_id: user.id,
-      });
-      setLiked(true);
-      setLikeCount((c) => c + 1);
+    setActionError(null);
+    const result = liked
+      ? await supabase.from("post_likes").delete().eq("post_id", post.id).eq("user_id", user.id)
+      : await supabase.from("post_likes").insert({ post_id: post.id, user_id: user.id });
+
+    if (result.error) {
+      setActionError(result.error.message);
+      setLiking(false);
+      return;
     }
 
+    setLiked(!liked);
+    setLikeCount((count) => Math.max(0, count + (liked ? -1 : 1)));
     setLiking(false);
   };
 
@@ -113,6 +110,7 @@ export default function PostCard({ post }: { post: PostCardPost }) {
             </div>
           )}
 
+          {actionError && <p role="alert" className="mt-2 text-xs text-red-600">{actionError}</p>}
           <div className="flex items-center gap-5 mt-3.5">
             <button
               type="button"
