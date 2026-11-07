@@ -65,7 +65,7 @@ struct NativeChatMessage: Decodable, Identifiable { let id: String; let sender_i
 
 struct ModerationReport: Decodable, Identifiable {
  let id:String; let reporter_id:String; let target_type:String; let target_id:String
- let reason:String; let details:String?; let status:String; let created_at:String
+ let target_user_id:String?; let reason:String; var details:String?; let status:String; let created_at:String
 }
 struct ModerationMediaCase: Decodable, Identifiable {
     let id:String; let owner_id:String; let status:String; let decision_reason:String?
@@ -114,6 +114,10 @@ final class AppModel: ObservableObject {
     @Published var restrictionStatus = ""
     @Published var restrictionReason = ""
     @Published var myAppealStatus: String?
+    @Published var moderationReports: [ModerationReport] = []
+    @Published var moderationAppeals: [ModerationAppeal] = []
+    @Published var moderationTextCases: [ModerationTextCase] = []
+    @Published var moderationMediaCases: [ModerationMediaCase] = []
 
     private func validateAccountStatus() async -> Bool {
         guard let me = userId, accessToken != nil else { return false }
