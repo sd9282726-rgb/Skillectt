@@ -338,8 +338,14 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         val me=userId ?: return
         if(targetId==me) return
         try {
-            api("POST","/rest/v1/follows",active,JSONObject().put("follower_id",me).put("following_id",targetId))
-            error = "Followed"
+            val existing = apiArray("/rest/v1/follows?select=id&follower_id=eq.$me&following_id=eq.$targetId", active)
+            if (existing.length() > 0) {
+                api("DELETE", "/rest/v1/follows?follower_id=eq.$me&following_id=eq.$targetId", active)
+                error = "Unfollowed"
+            } else {
+                api("POST","/rest/v1/follows",active,JSONObject().put("follower_id",me).put("following_id",targetId))
+                error = "Followed"
+            }
         } catch(e:Exception){ error=e.message }
     }
 
@@ -641,6 +647,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         TextButton(onClick={
                             token = null
                             userId = null
+                            tab = "Home"
                             onSignOut()
                         }){Text("Sign out", color=Color.Red)}
                     }
