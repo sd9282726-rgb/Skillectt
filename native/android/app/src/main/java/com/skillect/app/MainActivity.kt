@@ -254,6 +254,16 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         } catch(e:Exception){ error=e.message }
     }
 
+    suspend fun followUser(targetId:String) {
+        val active=token ?: return
+        val me=userId ?: return
+        if(targetId==me) return
+        try {
+            api("POST","/rest/v1/follows",active,JSONObject().put("follower_id",me).put("following_id",targetId))
+            error = "Followed"
+        } catch(e:Exception){ error=e.message }
+    }
+
     suspend fun blockUser(targetId:String) {
         val active=token ?: return
         val me=userId ?: return
@@ -404,7 +414,13 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                             Text("Your learning feed",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
                             TextButton(onClick={scope.launch{loadFeed()}}){Text("Refresh")}
                         }
-                        if(posts.isEmpty()) Spacer(Modifier.fillMaxSize())
+                        if(posts.isEmpty()) {
+                            Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement=Arrangement.Center) {
+                                Text("Your feed is ready", color=Ink, fontSize=20.sp, fontWeight=FontWeight.Bold)
+                                Text("Follow people, join communities, or create your first skill update.", color=Color.Gray, modifier=Modifier.padding(top=8.dp))
+                                Button(onClick={tab="Create"}, modifier=Modifier.padding(top=16.dp)){Text("Create a post")}
+                            }
+                        }
                         else LazyColumn(contentPadding=PaddingValues(14.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                             items(posts,key={it.id}) { post ->
                                 Card(colors=CardDefaults.cardColors(containerColor=Color(0xFF15151D)),shape=RoundedCornerShape(18.dp),modifier=Modifier.fillMaxWidth()) {
@@ -428,7 +444,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         Text("Find your people",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
                         OutlinedTextField(searchText,{searchText=it},label={Text("Search by name or username")},modifier=Modifier.fillMaxWidth())
                         Button(onClick={scope.launch{searchPeople()}},modifier=Modifier.padding(top=8.dp)){Text("Search")}
-                        LazyColumn { items(results){ item -> Card(Modifier.fillMaxWidth().padding(vertical=5.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);TextButton(onClick={scope.launch{blockUser(item.id)}}){Text("Block")}}} } }
+                        LazyColumn { items(results){ item -> Card(Modifier.fillMaxWidth().padding(vertical=5.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);TextButton(onClick={scope.launch{followUser(item.id)}}){Text("Follow")}; TextButton(onClick={scope.launch{blockUser(item.id)}}){Text("Block")}}} } }
                     }
                     "Create" -> {
                         val activeToken = token
@@ -454,10 +470,19 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         Text(displayName.ifBlank{"Your profile"},fontSize=25.sp,fontWeight=FontWeight.Bold,color=Ink)
                         Text("@$username",color=Color.Gray)
                         OutlinedTextField(displayName,{displayName=it},label={Text("Display name")},modifier=Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(8.dp))
                         OutlinedTextField(bio,{bio=it},label={Text("Bio")},modifier=Modifier.fillMaxWidth(),maxLines=4)
-                        Button(onClick={scope.launch{updateProfile()}}){Text("Save profile")}
-                        Text("Posts: ${posts.count{it.authorId==userId}}",modifier=Modifier.padding(top=14.dp))
-                        TextButton(onClick={scope.launch{loadFeed()}}){Text("Refresh profile")}
+                        Button(onClick={scope.launch{updateProfile()}}, modifier=Modifier.padding(top=12.dp).fillMaxWidth()){Text("Save profile")}
+                        Text("Your posts: ${posts.count{it.authorId==userId}}",modifier=Modifier.padding(top=14.dp), color=Ink)
+                        TextButton(onClick={scope.launch{loadFeed(); loadNotifications(); tab="Feed"}}){Text("Refresh")}
+                        Spacer(Modifier.height(20.dp))
+                        Text("Account", fontWeight=FontWeight.Bold, color=Ink)
+                        Text("Skillect ${BuildConfig.VERSION_NAME}", color=Color.Gray, fontSize=12.sp)
+                        TextButton(onClick={
+                            token = null
+                            userId = null
+                            onSignOut()
+                        }){Text("Sign out", color=Color.Red)}
                     }
                     "Messages" -> MessagesScreen(token ?: return@Column, userId ?: return@Column)
                     "Communities" -> LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
