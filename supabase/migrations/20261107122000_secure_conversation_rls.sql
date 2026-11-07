@@ -3,6 +3,8 @@
 
 begin;
 
+create schema if not exists private;
+
 alter table if exists public.conversations
   add column if not exists created_by uuid references auth.users(id);
 
