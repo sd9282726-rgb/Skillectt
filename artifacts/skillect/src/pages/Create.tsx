@@ -78,15 +78,6 @@ export default function Create() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const savePostMetadata = async (postId: string): Promise<string | null> => {
-    const { error: metadataError } = await supabase
-      .from("posts")
-      .update({ tags, category: category || null })
-      .eq("id", postId)
-      .eq("author_id", user!.id);
-    return metadataError?.message || null;
-  };
-
   const handleSubmit = async () => {
     if (!content.trim() || !user || loading) return;
     setLoading(true);
@@ -133,14 +124,8 @@ export default function Create() {
         }
       }
 
-      const metadataWarning = file && postId && (tags.length > 0 || category)
-        ? await savePostMetadata(postId)
-        : null;
-
       if (file) {
-        setSuccess(metadataWarning
-          ? "Your media post is safely submitted, but its tags could not be saved. It stays hidden until screening approves it."
-          : "Your media post has been submitted. It stays hidden until safety screening approves it.");
+        setSuccess("Your media post has been submitted. It stays hidden until safety screening approves it.");
         setContent("");
         setTags([]);
         setCategory("");
