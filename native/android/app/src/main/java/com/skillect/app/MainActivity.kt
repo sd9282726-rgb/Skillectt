@@ -52,6 +52,14 @@ private const val KEY = BuildConfig.SUPABASE_KEY
 data class Post(val id: String, val authorId: String, val body: String, val author: String, val handle: String, val image: String?, val mediaUrl: String?, val mediaType: String, val likes: Int, val comments: Int)
 data class SimpleItem(val id: String, val title: String, val detail: String)
 
+
+private fun jsonArrayToCsv(value: JSONArray?): String {
+    if (value == null) return ""
+    return (0 until value.length()).map { value.optString(it) }.filter { it.isNotBlank() }.joinToString(", ")
+}
+private fun csvToJsonArray(value: String): JSONArray =
+    JSONArray(value.split(",").map { it.trim() }.filter { it.isNotBlank() }.distinct().take(20))
+
 private fun postFromJson(p: JSONObject): Post {
     val profile = p.optJSONObject("profiles") ?: JSONObject()
     val mediaType = p.optString("media_type", "text")
@@ -114,6 +122,8 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     var displayName by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var bio by remember { mutableStateOf("") }
+    var skillsText by remember { mutableStateOf("") }
+    var interestsText by remember { mutableStateOf("") }
     var projectTitle by remember { mutableStateOf("") }
     var projectDescription by remember { mutableStateOf("") }
     var notifications by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
@@ -143,7 +153,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             val u = api("GET", "/auth/v1/user", active)
             userId = u.optString("id").takeIf { it.isNotBlank() }
             val id = userId ?: return
-            val arr = apiArray("/rest/v1/profiles?select=display_name,username,bio,onboarded,is_private&id=eq.$id&limit=1", active)
+            val arr = apiArray("/rest/v1/profiles?select=display_name,username,bio,onboarded,is_private,skills,interests&id=eq.$id&limit=1", active)
             if (arr.length() > 0) {
                 val p = arr.getJSONObject(0)
                 displayName = p.optString("display_name")
@@ -323,7 +333,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         val active = token ?: return
         val me = userId ?: return
         try {
-            api("PATCH", "/rest/v1/profiles?id=eq.$me", active, JSONObject().put("display_name", displayName).put("bio", bio))
+            api("PATCH", "/rest/v1/profiles?id=eq.$me", active, JSONObject().put("display_name", displayName).put("bio", bio).put("skills", csvToJsonArray(skillsText)).put("interests", csvToJsonArray(interestsText)))
             loadUser()
         } catch (e: Exception) { error = e.message }
     }
@@ -395,8 +405,8 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
         if (searchText.isBlank()) { results=emptyList(); return }
         try {
             val q=URLEncoder.encode(searchText.trim(), "UTF-8")
-            val arr=apiArray("/rest/v1/profiles?select=id,display_name,username,bio&or=(username.ilike.%25$q%25,display_name.ilike.%25$q%25)&limit=30",token)
-            results=(0 until arr.length()).map { val p=arr.getJSONObject(it); SimpleItem(p.optString("id"),p.optString("display_name")+"  @"+p.optString("username"),p.optString("bio")) }
+            val arr=apiArray("/rest/v1/profiles?select=id,display_name,username,bio,skills&or=(username.ilike.%25$q%25,display_name.ilike.%25$q%25)&limit=30",token)
+            results=(0 until arr.length()).map { val p=arr.getJSONObject(it); val skills=jsonArrayToCsv(p.optJSONArray("skills")); val detail=listOf(p.optString("bio"), if(skills.isNotBlank()) "Skills: " + skills else "").filter{it.isNotBlank()}.joinToString(" · "); SimpleItem(p.optString("id"),p.optString("display_name")+"  @"+p.optString("username"),detail) }
         } catch(e:Exception){ error=e.message }
     }
 
@@ -669,6 +679,8 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         OutlinedTextField(displayName,{displayName=it},label={Text("Display name")},modifier=Modifier.fillMaxWidth())
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(bio,{bio=it},label={Text("Bio")},modifier=Modifier.fillMaxWidth(),maxLines=4)
+                        OutlinedTextField(skillsText,{skillsText=it},label={Text("Skills (comma-separated)")},modifier=Modifier.fillMaxWidth(),maxLines=2)
+                        OutlinedTextField(interestsText,{interestsText=it},label={Text("Goals and interests (comma-separated)")},modifier=Modifier.fillMaxWidth(),maxLines=2)
                         Button(onClick={scope.launch{updateProfile()}}, modifier=Modifier.padding(top=12.dp).fillMaxWidth()){Text("Save profile")}
                         Text("Your posts: ${posts.count{it.authorId==userId}}",modifier=Modifier.padding(top=14.dp), color=Ink)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -687,6 +699,8 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                             displayName = ""
                             username = ""
                             bio = ""
+                            skillsText = ""
+                            interestsText = ""
                             dateOfBirth = ""
                             onboarded = false
                             isPrivate = false
