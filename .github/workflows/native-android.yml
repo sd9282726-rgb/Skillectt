@@ -38,7 +38,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Patch MainActivity (keep inspiration, navy, nav)
+      - name: Patch MainActivity (inspiration + navy + nav)
         run: |
           set -euo pipefail
           TARGET="native/android/app/src/main/java/com/skillect/app/MainActivity.kt"
@@ -46,6 +46,7 @@ jobs:
           python3 native/android/scripts/apply_features.py "$TARGET" || true
           python3 native/android/scripts/polish_features.py "$TARGET" || true
           python3 native/android/scripts/slices_1_to_6.py "$TARGET" || true
+          python3 native/android/scripts/inject_inspiration.py "$TARGET" || true
           wc -c "$TARGET"
           grep -n "Get inspired\|Blue = Color\|Home" "$TARGET" | head -20
 
@@ -58,7 +59,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No MainActivity changes to commit"
           else
-            git commit -m "MainActivity: slices + inspiration + navy"
+            git commit -m "MainActivity: inspiration strip + slices + navy"
             git push
           fi
 
