@@ -157,9 +157,9 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             }
             val me = userId
             if (me != null) {
-                val likes = apiArray("/rest/v1/post_likes?select=post_id&user_id=eq.$me", active)
+                val likes = apiArray("/rest/v1/post_likes?select=post_id&user_id=eq.$me", token)
                 likedIds = (0 until likes.length()).map { likes.getJSONObject(it).optString("post_id") }.toSet()
-                val saves = apiArray("/rest/v1/saved_posts?select=post_id&user_id=eq.$me", active)
+                val saves = apiArray("/rest/v1/saved_posts?select=post_id&user_id=eq.$me", token)
                 savedIds = (0 until saves.length()).map { saves.getJSONObject(it).optString("post_id") }.toSet()
             }
         } catch (e: Exception) { error = e.message ?: "Could not load feed" }
