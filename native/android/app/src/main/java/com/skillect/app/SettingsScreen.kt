@@ -28,7 +28,7 @@ fun SettingsScreen(
     ) {
         item {
             Text("Settings", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFFF2F2F2))
-            Text("Privacy and account controls", color = Color.Gray, fontSize = 13.sp)
+            Text("Privacy and account controls", color = Color(0xFF94A3B8), fontSize = 13.sp)
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF10243D))) {
@@ -39,7 +39,7 @@ fun SettingsScreen(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text("Private profile", fontWeight = FontWeight.Bold, color = Color(0xFFF2F2F2))
-                        Text("Only people you approve can see more of your activity.", color = Color.Gray, fontSize = 12.sp)
+                        Text("Only people you approve can see more of your activity.", color = Color(0xFF94A3B8), fontSize = 12.sp)
                     }
                     Switch(checked = isPrivate, onCheckedChange = onTogglePrivate)
                 }
@@ -50,7 +50,7 @@ fun SettingsScreen(
             TextButton(onClick = onRefreshBlocked) { Text("Refresh blocked list") }
         }
         if (blocked.isEmpty()) {
-            item { Text("No blocked accounts.", color = Color.Gray) }
+            item { Text("No blocked accounts.", color = Color(0xFF94A3B8)) }
         } else {
             items(blocked, key = { it.id }) { person ->
                 Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF10243D))) {
@@ -61,7 +61,7 @@ fun SettingsScreen(
                     ) {
                         Column {
                             Text(person.title, color = Color(0xFFF2F2F2), fontWeight = FontWeight.Bold)
-                            Text(person.detail, color = Color.Gray, fontSize = 12.sp)
+                            Text(person.detail, color = Color(0xFF94A3B8), fontSize = 12.sp)
                         }
                         TextButton(onClick = { onUnblock(person.id) }) { Text("Unblock") }
                     }
@@ -72,11 +72,11 @@ fun SettingsScreen(
             Text("Account", fontWeight = FontWeight.Bold, color = Color(0xFFF2F2F2), modifier = Modifier.padding(top = 8.dp))
             Text(
                 "To delete your account permanently, email support@skillect.app from your registered email with subject DELETE ACCOUNT. We remove profile data and posts per our privacy policy.",
-                color = Color.Gray,
+                color = Color(0xFF94A3B8),
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 6.dp)
             )
-            Text("Skillect $versionName", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
+            Text("Skillect $versionName", color = Color(0xFF94A3B8), fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
             TextButton(onClick = onSignOut) { Text("Sign out", color = Color.Red) }
         }
     }
