@@ -199,7 +199,7 @@ final class AppModel: ObservableObject {
             moderationAppeals = try JSONDecoder().decode([ModerationAppeal].self, from: appeals)
             let textCases = try await request(path: "/rest/v1/moderation_text_cases?select=id,user_id,content_type,content_snapshot,reason,status,created_at&status=eq.blocked&order=created_at.asc&limit=100")
             moderationTextCases = try JSONDecoder().decode([ModerationTextCase].self, from: textCases)
-            let mediaCases = try await request(path: "/rest/v1/media_assets?select=id,owner_id,status,decision_reason,created_at,media_type,mime_type,post_content&status=eq.pending&media_type=eq.video&reviewed_at=is.null&order=created_at.asc&limit=100")
+            let mediaCases = try await request(path: "/rest/v1/media_assets?select=id,owner_id,status,decision_reason,created_at,media_type,mime_type,post_content&status=eq.pending&media_type=in.(video,image)&reviewed_at=is.null&order=created_at.asc&limit=100")
             moderationMediaCases = try JSONDecoder().decode([ModerationMediaCase].self, from: mediaCases)
             for index in moderationMediaCases.indices {
                 do {
