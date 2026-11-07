@@ -25,11 +25,12 @@ interface PostWithAuthor {
 export default function Feed() {
   const [posts, setPosts] = useState<PostWithAuthor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const load = async () => {
+  const load = async () => {
       setLoading(true);
-      const { data, error } = await supabase
+      setError(null);
+      const { data, error: loadError } = await supabase
         .from("posts")
         .select(
           `
@@ -53,13 +54,21 @@ export default function Feed() {
         .order("created_at", { ascending: false })
         .limit(50);
 
-      if (!error && data) {
+      if (loadError) {
+        setError(loadError.message);
+      } else if (data) {
         setPosts(data as unknown as PostWithAuthor[]);
       }
       setLoading(false);
     };
 
-    load();
+  useEffect(() => {
+    void load();
+    const channel = supabase
+      .channel("feed-posts")
+      .on("postgres_changes", { event: "*", schema: "public", table: "posts" }, () => void load())
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
   }, []);
 
   return (
@@ -74,6 +83,8 @@ export default function Feed() {
           New post
         </Link>
       </div>
+
+      {error && <div role="alert" className="mx-4 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
       {loading ? (
         <div className="flex justify-center py-16">
