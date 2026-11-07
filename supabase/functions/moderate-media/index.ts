@@ -40,8 +40,7 @@ Deno.serve(async (request: Request) => {
   const storageHeaders = { ...adminHeaders(service), "Content-Type": file.type, "x-upsert": "false" };
   const privateUpload = await fetch(base + "/storage/v1/object/media-quarantine/" + path, { method: "POST", headers: storageHeaders, body: file });
   if (!privateUpload.ok) return json(502, { error: "Could not save image in private quarantine" });
-  const publicUpload = await fetch(base + "/storage/v1/object/post-media/" + path, { method: "POST", headers: storageHeaders, body: file });
-  if (!publicUpload.ok) return json(502, { error: "Could not publish image file" });
+  // Keep the object private until automated screening approves it.
   const publicUrl = base + "/storage/v1/object/public/post-media/" + path;
 
   const assetResponse = await fetch(base + "/rest/v1/media_assets", {
@@ -102,6 +101,12 @@ async function moderateImage(base: string, service: string, sightUser: string, s
       await fetch(base + "/rest/v1/media_assets?id=eq." + assetId, { method: "PATCH", headers: { ...admin, "Content-Type": "application/json" }, body: JSON.stringify({ status: "rejected", reviewed_at: new Date().toISOString(), decision_reason: "Automated screening flagged sexual or highly suggestive content" }) });
       return;
     }
+    const published = await fetch(base + "/storage/v1/object/post-media/" + path, {
+      method: "POST",
+      headers: { ...admin, "Content-Type": file.type, "x-upsert": "false" },
+      body: file,
+    });
+    if (!published.ok) throw new Error("Could not publish the approved image file");
     const approved = await fetch(base + "/rest/v1/media_assets?id=eq." + assetId, { method: "PATCH", headers: { ...admin, "Content-Type": "application/json" }, body: JSON.stringify({ status: "approved", reviewed_at: new Date().toISOString(), decision_reason: "Automated image screening passed" }) });
     if (!approved.ok) throw new Error("Could not save image approval");
     const visible = await fetch(base + "/rest/v1/posts?id=eq." + postId, { method: "PATCH", headers: { ...admin, "Content-Type": "application/json" }, body: JSON.stringify({ moderation_hidden: false }) });
