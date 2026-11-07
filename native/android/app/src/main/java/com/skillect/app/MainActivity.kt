@@ -399,7 +399,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         Text("Posts: ${posts.count{it.authorId==userId}}",modifier=Modifier.padding(top=14.dp))
                         TextButton(onClick={scope.launch{loadFeed()}}){Text("Refresh profile")}
                     }
-                    "Messages" -> Spacer(Modifier.fillMaxSize())
+                    "Messages" -> MessagesScreen(token ?: return@Column, userId ?: return@Column)
                     "Communities" -> LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
                         item { Text("Communities",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink) }
                         items(communities){ item -> Card(Modifier.fillMaxWidth().padding(vertical=6.dp)){Column(Modifier.padding(14.dp)){Text(item.title,fontWeight=FontWeight.Bold);Text(item.detail,color=Color.Gray);Button(onClick={scope.launch{joinCommunity(item.id)}},modifier=Modifier.padding(top=6.dp)){Text("Join")}}} }
@@ -429,6 +429,167 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
             confirmButton={TextButton(onClick={scope.launch{addComment(postId)}}){Text("Send")}},
             dismissButton={TextButton(onClick={showCommentsFor=null}){Text("Close")}}
         )
+    }
+}
+
+
+
+@Composable
+private fun MessagesScreen(token: String, userId: String) {
+    var conversations by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
+    var activeConversation by remember { mutableStateOf<String?>(null) }
+    var activeTitle by remember { mutableStateOf("") }
+    var messages by remember { mutableStateOf<List<SimpleItem>>(emptyList()) }
+    var messageText by remember { mutableStateOf("") }
+    var newUsername by remember { mutableStateOf("") }
+    var newUserId by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    var errorText by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    suspend fun loadInbox() {
+        loading = true
+        try {
+            val memberships = apiArray("/rest/v1/conversation_participants?select=conversation_id&user_id=eq.$userId", token)
+            val items = mutableListOf<SimpleItem>()
+            for (i in 0 until memberships.length()) {
+                val conversationId = memberships.getJSONObject(i).optString("conversation_id")
+                if (conversationId.isBlank()) continue
+                val people = apiArray("/rest/v1/conversation_participants?select=user_id,profiles(display_name,username)&conversation_id=eq.$conversationId", token)
+                var title = "Conversation"
+                for (j in 0 until people.length()) {
+                    val person = people.getJSONObject(j)
+                    if (person.optString("user_id") != userId) {
+                        val profile = person.optJSONObject("profiles") ?: JSONObject()
+                        title = profile.optString("display_name").ifBlank { profile.optString("username").ifBlank { "Skillect member" } }
+                        break
+                    }
+                }
+                val latest = apiArray("/rest/v1/messages?select=content&conversation_id=eq.$conversationId&order=created_at.desc&limit=1", token)
+                val preview = if (latest.length() > 0) latest.getJSONObject(0).optString("content") else "Start the conversation"
+                items.add(SimpleItem(conversationId, title, preview))
+            }
+            conversations = items
+            errorText = null
+        } catch (e: Exception) {
+            errorText = e.message
+        } finally {
+            loading = false
+        }
+    }
+
+    suspend fun openConversation(id: String, title: String) {
+        activeConversation = id
+        activeTitle = title
+        try {
+            val arr = apiArray("/rest/v1/messages?select=id,content,created_at,sender_id&conversation_id=eq.$id&order=created_at.asc&limit=200", token)
+            messages = (0 until arr.length()).map { i ->
+                val item = arr.getJSONObject(i)
+                SimpleItem(item.optString("id"), if (item.optString("sender_id") == userId) "You" else title, item.optString("content"))
+            }
+            api("POST", "/rest/v1/conversation_reads", token, JSONObject().put("conversation_id", id).put("user_id", userId).put("last_read_at", java.time.Instant.now().toString()))
+        } catch (e: Exception) {
+            errorText = e.message
+        }
+    }
+
+    suspend fun sendMessage() {
+        val id = activeConversation ?: return
+        val body = messageText.trim()
+        if (body.isEmpty()) return
+        try {
+            api("POST", "/rest/v1/messages", token, JSONObject().put("conversation_id", id).put("sender_id", userId).put("content", body))
+            messageText = ""
+            openConversation(id, activeTitle)
+            loadInbox()
+        } catch (e: Exception) {
+            errorText = e.message
+        }
+    }
+
+    suspend fun findUser() {
+        if (newUsername.isBlank()) return
+        try {
+            val encoded = URLEncoder.encode(newUsername.trim().removePrefix("@"), "UTF-8")
+            val found = apiArray("/rest/v1/profiles?select=id,display_name,username&username=ilike.$encoded&limit=1", token)
+            if (found.length() == 0) {
+                errorText = "No account found with that username"
+                newUserId = null
+            } else {
+                newUserId = found.getJSONObject(0).optString("id")
+                errorText = "Account found. Tap Start conversation."
+            }
+        } catch (e: Exception) {
+            errorText = e.message
+        }
+    }
+
+    suspend fun startConversation() {
+        val target = newUserId ?: return
+        if (target == userId) {
+            errorText = "You cannot message yourself"
+            return
+        }
+        try {
+            val created = api("POST", "/rest/v1/conversations", token, JSONObject().put("created_by", userId))
+            val id = created.optString("id")
+            if (id.isBlank()) throw IllegalStateException("Could not create conversation")
+            api("POST", "/rest/v1/conversation_participants", token, JSONObject().put("conversation_id", id).put("user_id", userId))
+            api("POST", "/rest/v1/conversation_participants", token, JSONObject().put("conversation_id", id).put("user_id", target))
+            newUsername = ""
+            newUserId = null
+            loadInbox()
+            openConversation(id, "New conversation")
+        } catch (e: Exception) {
+            errorText = e.message
+        }
+    }
+
+    LaunchedEffect(token, userId) { loadInbox() }
+
+    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(if (activeConversation == null) "Messages" else activeTitle, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Ink)
+            if (activeConversation != null) TextButton(onClick = { activeConversation = null; scope.launch { loadInbox() } }) { Text("Back") }
+            else TextButton(onClick = { scope.launch { loadInbox() } }) { Text("Refresh") }
+        }
+        errorText?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
+        if (activeConversation == null) {
+            OutlinedTextField(newUsername, { newUsername = it; newUserId = null }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Start a chat by username") })
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { scope.launch { findUser() } }, enabled = newUsername.isNotBlank()) { Text("Find person") }
+                Button(onClick = { scope.launch { startConversation() } }, enabled = newUserId != null) { Text("Start conversation") }
+            }
+            if (loading) CircularProgressIndicator()
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(conversations, key = { it.id }) { item ->
+                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF15151D)), modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.fillMaxWidth().clickable { scope.launch { openConversation(item.id, item.title) } }.padding(14.dp)) {
+                            Text(item.title, color = Ink, fontWeight = FontWeight.Bold)
+                            Text(item.detail, color = Color.LightGray, maxLines = 1)
+                        }
+                    }
+                }
+            }
+        } else {
+            LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(messages, key = { it.id }) { item ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (item.title == "You") Arrangement.End else Arrangement.Start) {
+                        Surface(color = if (item.title == "You") Color(0xFF164B3A) else Color(0xFF20202A), shape = RoundedCornerShape(16.dp)) {
+                            Column(Modifier.widthIn(max = 280.dp).padding(12.dp)) {
+                                Text(item.title, color = Color(0xFF80DDB5), fontSize = 11.sp)
+                                Text(item.detail, color = Ink)
+                            }
+                        }
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(messageText, { messageText = it }, modifier = Modifier.weight(1f), placeholder = { Text("Write a message") }, maxLines = 3)
+                Spacer(Modifier.width(8.dp))
+                Button(onClick = { scope.launch { sendMessage() } }, enabled = messageText.isNotBlank()) { Text("Send") }
+            }
+        }
     }
 }
 
