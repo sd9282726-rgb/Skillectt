@@ -43,6 +43,7 @@ export default function PostDetail({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [liking, setLiking] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -94,24 +95,21 @@ export default function PostDetail({ id }: { id: string }) {
   }, [id, user?.id]);
 
   const toggleLike = async () => {
-    if (!user || !post) return;
+    if (!user || !post || liking) return;
+    setLiking(true);
+    setActionError(null);
 
-    if (liked) {
-      await supabase
-        .from("post_likes")
-        .delete()
-        .eq("post_id", post.id)
-        .eq("user_id", user.id);
-      setLiked(false);
-      setLikeCount((c) => Math.max(0, c - 1));
+    const result = liked
+      ? await supabase.from("post_likes").delete().eq("post_id", post.id).eq("user_id", user.id)
+      : await supabase.from("post_likes").insert({ post_id: post.id, user_id: user.id });
+
+    if (result.error) {
+      setActionError(result.error.message);
     } else {
-      await supabase.from("post_likes").insert({
-        post_id: post.id,
-        user_id: user.id,
-      });
-      setLiked(true);
-      setLikeCount((c) => c + 1);
+      setLiked(!liked);
+      setLikeCount((count) => Math.max(0, count + (liked ? -1 : 1)));
     }
+    setLiking(false);
   };
 
   const handleComment = async () => {
@@ -227,6 +225,7 @@ export default function PostDetail({ id }: { id: string }) {
         <button
           type="button"
           onClick={toggleLike}
+          disabled={!user || liking}
           className={`flex items-center gap-1.5 text-xs font-medium mt-4 transition-colors ${
             liked ? "text-pink-600" : "text-gray-500 hover:text-pink-600"
           }`}
