@@ -41,25 +41,55 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [profile, setProfile] = useState<Profile | undefined>(undefined);
-  const [isProfileLoading, setIsProfileLoading] = useState(false);
+  const [isProfileLoading, setIsProfileLoading] = useState(true);
 
   const fetchProfile = async () => {
     if (!user) {
       setProfile(undefined);
+      setIsProfileLoading(false);
       return;
     }
 
     setIsProfileLoading(true);
+    const profileFields = "id,display_name,username,avatar_url,cover_url,bio,location,website,skills,interests,country,onboarded,is_private,created_at,updated_at";
     const { data, error } = await supabase
       .from("profiles")
-      .select("id,display_name,username,avatar_url,cover_url,bio,location,website,skills,interests,country,onboarded,is_private,created_at,updated_at")
+      .select(profileFields)
       .eq("id", user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Failed to load profile", error);
+      setProfile(undefined);
+      setIsProfileLoading(false);
+      return;
+    }
+
+    if (data) {
+      setProfile(data as Profile);
+      setIsProfileLoading(false);
+      return;
+    }
+
+    const metadata = user.user_metadata || {};
+    const displayName = String(metadata.display_name || user.email?.split("@")[0] || "Skillect member").slice(0, 50);
+    const requestedUsername = String(metadata.username || `member_${user.id.slice(0, 8)}`).toLowerCase();
+    const insertProfile = async (username: string) => supabase
+      .from("profiles")
+      .insert({ id: user.id, display_name: displayName, username })
+      .select(profileFields)
       .single();
 
-    if (!error && data) {
-      setProfile(data as Profile);
-    } else {
+    let created = await insertProfile(requestedUsername);
+    if (created.error?.code === "23505") {
+      created = await insertProfile(`member_${user.id.slice(0, 8)}`);
+    }
+
+    if (created.error || !created.data) {
+      console.error("Failed to create missing profile", created.error);
       setProfile(undefined);
+    } else {
+      setProfile(created.data as Profile);
     }
     setIsProfileLoading(false);
   };
