@@ -52,7 +52,6 @@ fun AuthGate(
     var password by remember { mutableStateOf("") }
     var displayName by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
-    var dob by remember { mutableStateOf("") }
     var localBusy by remember { mutableStateOf(false) }
     var localError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -103,13 +102,11 @@ fun AuthGate(
             OutlinedTextField(displayName, { displayName = it }, label = { Text("Display name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(username, { username = it }, label = { Text("Username") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(dob, { dob = it }, label = { Text("Date of birth (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             Text(
-                "Skillect is for people aged 16 and above. Your birth date stays private.",
+                "Skillect is for people aged 16 and above. Age is verified during profile setup.",
                 color = AuthMuted,
                 fontSize = 12.sp,
-                modifier = Modifier.padding(top = 6.dp)
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
         err?.let { Text(it, color = Color.Red, modifier = Modifier.padding(top = 10.dp)) }
@@ -121,11 +118,9 @@ fun AuthGate(
                     onClearError()
                     try {
                         if (mode == "signup") {
-                            if (!isAtLeast16(dob.trim())) error("Skillect is for people aged 16 and above. Enter a valid date of birth.")
                             val meta = org.json.JSONObject()
                                 .put("display_name", displayName.ifBlank { email.substringBefore("@") })
                                 .put("username", username.ifBlank { "user_" + System.currentTimeMillis().toString().takeLast(6) })
-                                .put("date_of_birth", dob.trim())
                             val body = org.json.JSONObject()
                                 .put("email", email.trim())
                                 .put("password", password)
