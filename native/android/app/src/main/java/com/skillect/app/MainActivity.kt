@@ -459,9 +459,31 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                 error?.let { Text(it,color=Color.Red,modifier=Modifier.padding(horizontal=16.dp,vertical=6.dp)) }
                 when(tab) {
                     "Home" -> {
-                        Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=10.dp),horizontalArrangement=Arrangement.SpaceBetween) {
-                            Text("Your learning feed",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
-                            TextButton(onClick={scope.launch{loadFeed()}}){Text("Refresh")}
+                        Column(Modifier.fillMaxWidth().padding(horizontal=14.dp, vertical=8.dp)) {
+                            Text("Get inspired", fontWeight=FontWeight.Bold, color=Ink, fontSize=16.sp)
+                            Row(Modifier.fillMaxWidth().padding(top=8.dp), horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                                listOf(
+                                    Triple("Share a project", "Show what you build", "Create"),
+                                    Triple("Learn in public", "Post a skill update", "Create"),
+                                    Triple("Find people", "Creators like you", "Explore"),
+                                    Triple("Join a club", "Communities", "Communities")
+                                ).forEach { (title, sub, go) ->
+                                    Card(
+                                        colors=CardDefaults.cardColors(containerColor=Color(0xFF15151D)),
+                                        shape=RoundedCornerShape(14.dp),
+                                        modifier=Modifier.weight(1f).clickable { tab = go }
+                                    ) {
+                                        Column(Modifier.padding(10.dp)) {
+                                            Text(title, color=Ink, fontSize=11.sp, fontWeight=FontWeight.SemiBold, maxLines=2)
+                                            Text(sub, color=Color.Gray, fontSize=9.sp, modifier=Modifier.padding(top=2.dp), maxLines=2)
+                                        }
+                                    }
+                                }
+                            }
+                            Row(Modifier.fillMaxWidth().padding(top=10.dp), horizontalArrangement=Arrangement.SpaceBetween, verticalAlignment=Alignment.CenterVertically) {
+                                Text("For you", fontSize=18.sp, fontWeight=FontWeight.Bold, color=Ink)
+                                TextButton(onClick={scope.launch{loadFeed()}}){Text("Refresh")}
+                            }
                         }
                         if(posts.isEmpty()) {
                             Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement=Arrangement.Center) {
