@@ -683,9 +683,8 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                     submitVideoPost(context,selected,active,me,createText.trim())
                     successMessage="Post published. Video safety screening is running in the background."
                 } else if(mime.startsWith("image/")) {
-                    val publicUrl=publishImagePost(context,selected,active,me)
-                    api("POST","/rest/v1/posts",active,JSONObject().put("author_id",me).put("content",createText.trim()).put("image_url",publicUrl).put("media_type","image").put("tags",JSONArray()))
-                    successMessage="Photo post published after its automatic safety check."
+                    publishImagePost(context,selected,active,me,createText.trim())
+                    successMessage="Photo post published. Image safety screening is running in the background."
                 } else error("Choose an image or video file")
                 tab="Feed"
                 loadFeed()
@@ -1123,7 +1122,7 @@ private suspend fun submitVideoPost(context:Context, uri:Uri, token:String, user
     api("POST","/functions/v1/submit-video-post",token,JSONObject().put("storage_path",path).put("content",caption))
 }
 
-private suspend fun publishImagePost(context:Context, uri:Uri, token:String, userId:String):String = withContext(Dispatchers.IO) {
+private suspend fun publishImagePost(context:Context, uri:Uri, token:String, userId:String, caption:String) = withContext(Dispatchers.IO) {
     val mime=context.contentResolver.getType(uri) ?: "image/jpeg"
     require(mime in setOf("image/jpeg","image/png","image/webp","image/heic","image/heif")) { "Choose a JPEG, PNG, WebP or HEIC image" }
     val bytes=context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: error("Could not read selected image")
@@ -1131,15 +1130,16 @@ private suspend fun publishImagePost(context:Context, uri:Uri, token:String, use
     val fileName="upload."+when(mime) { "image/jpeg" -> "jpg"; "image/heic" -> "heic"; "image/heif" -> "heif"; else -> mime.substringAfter("/") }
     val multipart=MultipartBody.Builder().setType(MultipartBody.FORM)
         .addFormDataPart("file",fileName,bytes.toRequestBody(mime.toMediaType()))
+        .addFormDataPart("content",caption)
         .build()
     val request=Request.Builder().url("$URL/functions/v1/moderate-media")
         .addHeader("apikey",KEY).addHeader("Authorization","Bearer $token")
         .post(multipart).build()
     client.newCall(request).execute().use { response ->
         val text=response.body?.string().orEmpty()
-        if(!response.isSuccessful) throw IllegalStateException(try { JSONObject(text).optString("error","Image safety check failed") } catch(_:Exception) { "Image safety check failed (${response.code})" })
+        if(!response.isSuccessful) throw IllegalStateException(try { JSONObject(text).optString("error","Image publishing failed") } catch(_:Exception) { "Image publishing failed (${response.code})" })
         val result=JSONObject(text)
-        result.optString("public_url").takeIf { it.startsWith("https://") } ?: error("Image safety check returned no public URL")
+        if(result.optString("status")!="published_moderating" || result.optString("post_id").isBlank()) error("Image post was not created")
     }
 }
 
