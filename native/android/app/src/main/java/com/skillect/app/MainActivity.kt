@@ -8,6 +8,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -416,7 +418,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
 
     Scaffold(
             topBar={ Row(Modifier.fillMaxWidth().height(72.dp).background(SkillectBlack).padding(horizontal=22.dp),verticalAlignment=Alignment.CenterVertically) {
-                Box(Modifier.size(42.dp).background(Color(0xFF101018),RoundedCornerShape(12.dp)),contentAlignment=Alignment.Center) {
+                Box(Modifier.size(42.dp).background(NavyRaised,RoundedCornerShape(12.dp)),contentAlignment=Alignment.Center) {
                     Text("s",color=Blue,fontSize=34.sp,fontWeight=FontWeight.Bold)
                 }
                 Text("Skillect",color=Ink,fontWeight=FontWeight.ExtraBold,fontSize=25.sp,modifier=Modifier.padding(start=14.dp))
@@ -448,21 +450,21 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                     "Home" -> {
                         Column(Modifier.fillMaxWidth().padding(horizontal=14.dp, vertical=8.dp)) {
                             Text("Get inspired", fontWeight=FontWeight.Bold, color=Ink, fontSize=16.sp)
-                            Row(Modifier.fillMaxWidth().padding(top=8.dp), horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                                listOf(
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+                                items(listOf(
                                     Triple("Share a project", "Show what you build", "Create"),
                                     Triple("Learn in public", "Post a skill update", "Create"),
                                     Triple("Find people", "Creators like you", "Explore"),
                                     Triple("Join a club", "Communities", "Communities")
-                                ).forEach { (title, sub, go) ->
+                                )) { (title, sub, go) ->
                                     Card(
-                                        colors=CardDefaults.cardColors(containerColor=NavySurface),
-                                        shape=RoundedCornerShape(14.dp),
-                                        modifier=Modifier.weight(1f).clickable { if (go == "Create") { if (requireAccount()) tab = go } else tab = go }
+                                        colors = CardDefaults.cardColors(containerColor = NavySurface),
+                                        shape = RoundedCornerShape(16.dp),
+                                        modifier = Modifier.width(158.dp).clickable { if (go == "Create") { if (requireAccount()) tab = go } else tab = go }
                                     ) {
-                                        Column(Modifier.padding(10.dp)) {
-                                            Text(title, color=Ink, fontSize=11.sp, fontWeight=FontWeight.SemiBold, maxLines=2)
-                                            Text(sub, color=Color.Gray, fontSize=9.sp, modifier=Modifier.padding(top=2.dp), maxLines=2)
+                                        Column(Modifier.padding(14.dp)) {
+                                            Text(title, color = Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
+                                            Text(sub, color = MutedNav, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 2)
                                         }
                                     }
                                 }
@@ -481,11 +483,19 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                         }
                         else LazyColumn(contentPadding=PaddingValues(14.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                             items(posts,key={it.id}) { post ->
-                                Card(colors=CardDefaults.cardColors(containerColor=Color(0xFF15151D)),shape=RoundedCornerShape(18.dp),modifier=Modifier.fillMaxWidth()) {
-                                    Column(Modifier.padding(18.dp)) {
-                                        Text(post.author,fontWeight=FontWeight.Bold,color=Ink)
-                                        Text("@${post.handle}",color=Color.Gray,fontSize=12.sp)
-                                        Text(post.body,color=Ink,modifier=Modifier.padding(top=12.dp),lineHeight=22.sp)
+                                Card(colors=CardDefaults.cardColors(containerColor=NavySurface),shape=RoundedCornerShape(18.dp),modifier=Modifier.fillMaxWidth()) {
+                                    Column(Modifier.padding(16.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Surface(modifier = Modifier.size(42.dp), shape = CircleShape, color = NavyRaised) {
+                                                Box(contentAlignment = Alignment.Center) { Text(post.author.take(1).uppercase(), color = Blue, fontWeight = FontWeight.Bold, fontSize = 17.sp) }
+                                            }
+                                            Column(Modifier.weight(1f).padding(start = 11.dp)) {
+                                                Text(post.author,fontWeight=FontWeight.Bold,color=Ink,fontSize=14.sp)
+                                                Text("@${post.handle}",color=MutedNav,fontSize=12.sp)
+                                            }
+                                            Text("•••", color=MutedNav, fontSize=18.sp)
+                                        }
+                                        Text(post.body,color=Ink,modifier=Modifier.padding(top=14.dp),lineHeight=22.sp,fontSize=15.sp)
                                         post.mediaUrl?.let { media -> if (post.mediaType == "video") { AndroidView(factory = { ctx -> VideoView(ctx).apply { setVideoURI(Uri.parse(media)); setOnPreparedListener { it.isLooping = false; start() } } }, modifier = Modifier.fillMaxWidth().height(240.dp).padding(top = 10.dp)) } else { AsyncImage(model = media, contentDescription = "Post image", modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(top = 10.dp)) } } ?: post.image?.let { AsyncImage(model = it, contentDescription = "Post image", modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(top = 10.dp)) }
                                         Row(Modifier.fillMaxWidth().padding(top=10.dp),horizontalArrangement=Arrangement.SpaceBetween) {
                                             TextButton(onClick={if(requireAccount()) scope.launch{toggleLike(post)}}){Text((if(likedIds.contains(post.id)) "♥ " else "♡ ")+post.likes)}
@@ -772,9 +782,9 @@ private fun MessagesScreen(token: String, userId: String) {
             LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(messages, key = { it.id }) { item ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (item.title == "You") Arrangement.End else Arrangement.Start) {
-                        Surface(color = if (item.title == "You") Color(0xFF164B3A) else Color(0xFF20202A), shape = RoundedCornerShape(16.dp)) {
+                        Surface(color = if (item.title == "You") Color(0xFF1A4168) else Color(0xFF20202A), shape = RoundedCornerShape(16.dp)) {
                             Column(Modifier.widthIn(max = 280.dp).padding(12.dp)) {
-                                Text(item.title, color = Color(0xFF80DDB5), fontSize = 11.sp)
+                                Text(item.title, color = Blue, fontSize = 11.sp)
                                 Text(item.detail, color = Ink)
                             }
                         }
