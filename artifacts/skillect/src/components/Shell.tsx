@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Home,
@@ -10,6 +10,8 @@ import {
   Bell,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
 
 const NAV_ITEMS = [
   { href: "/", label: "Feed", icon: Home },
@@ -17,13 +19,36 @@ const NAV_ITEMS = [
   { href: "/communities", label: "Communities", icon: Users },
   { href: "/create", label: "Create", icon: PlusSquare },
   { href: "/messages", label: "Messages", icon: MessageCircle },
-  { href: "/notifications", label: "Alerts", icon: Bell },
+  { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/profile", label: "Profile", icon: UserIcon },
 ];
 
 export default function Shell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { profile } = useApp();
+  const { user } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) {
+      setUnreadCount(0);
+      return;
+    }
+    const loadUnread = async () => {
+      const { count } = await supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("read", false);
+      setUnreadCount(count || 0);
+    };
+    void loadUnread();
+    const channel = supabase
+      .channel(`shell-notifications:${user.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` }, () => void loadUnread())
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [user?.id]);
 
   return (
     <div className="min-h-[100dvh] w-full bg-white text-gray-900 flex">
@@ -51,6 +76,9 @@ export default function Shell({ children }: { children: ReactNode }) {
               >
                 <Icon className="h-5 w-5" />
                 {item.label}
+                {item.href === "/notifications" && unreadCount > 0 && (
+                  <span className="ml-auto rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{unreadCount > 99 ? "99+" : unreadCount}</span>
+                )}
               </Link>
             );
           })}
@@ -100,7 +128,12 @@ export default function Shell({ children }: { children: ReactNode }) {
                 active ? "text-blue-600" : "text-gray-500"
               }`}
             >
-              <Icon className="h-5 w-5" />
+              <span className="relative">
+                <Icon className="h-5 w-5" />
+                {item.href === "/notifications" && unreadCount > 0 && (
+                  <span className="absolute -right-2 -top-1 h-2 w-2 rounded-full bg-blue-600" />
+                )}
+              </span>
               {item.label}
             </Link>
           );
