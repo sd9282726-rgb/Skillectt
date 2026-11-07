@@ -49,7 +49,8 @@ create policy "Conversation members can add participants"
 on public.conversation_participants
 for insert to authenticated
 with check (
-  exists (
+  public.is_profile_onboarded()
+  and exists (
     select 1
     from public.conversations conv
     where conv.id = conversation_participants.conversation_id
@@ -68,7 +69,7 @@ using (public.is_conversation_participant(id));
 create policy "Authenticated users create conversations as themselves"
 on public.conversations
 for insert to authenticated
-with check (created_by = auth.uid());
+with check (created_by = auth.uid() and public.is_profile_onboarded());
 
 create policy "Only conversation participants can read messages"
 on public.messages
@@ -81,6 +82,8 @@ for insert to authenticated
 with check (
   sender_id = auth.uid()
   and public.is_conversation_participant(conversation_id)
+  and private.can_send_message(conversation_id)
+  and public.is_profile_onboarded()
 );
 
 commit;
