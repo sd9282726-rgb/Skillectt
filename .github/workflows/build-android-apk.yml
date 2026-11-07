@@ -1,10 +1,11 @@
-name: Build Skillect Native Android Release
+name: Build Skillect Native Android MVP Release
 
 on:
   workflow_dispatch:
   push:
     branches:
       - main
+      - native/complete-social-app-phase-1-auth
     paths:
       - "native/android/**"
       - ".github/workflows/build-android-apk.yml"

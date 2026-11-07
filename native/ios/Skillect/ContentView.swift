@@ -1,5 +1,8 @@
 import SwiftUI
 import UIKit
+import PhotosUI
+import UniformTypeIdentifiers
+import AVKit
 
 private let skillectBlue = Color(red: 0.0, green: 0.78, blue: 0.47)
 private let skillectBlack = Color(red: 0.02, green: 0.02, blue: 0.035)
@@ -10,6 +13,7 @@ struct RootView: View {
     var body: some View {
         Group {
             if model.accessToken == nil { SignInView(model: model) }
+            else if model.isAccountRestricted { AccountRestrictionView(model: model) }
             else {
                 MainTabs(model: model)
                     .task { await model.restoreSession() }
@@ -19,28 +23,80 @@ struct RootView: View {
     }
 }
 
+
+struct AccountRestrictionView: View {
+    @ObservedObject var model: AppModel
+    @State private var explanation = ""
+    var body: some View {
+        VStack(alignment:.leading,spacing:14) {
+            Spacer()
+            Image(systemName:"hand.raised.slash.fill").font(.system(size:42)).foregroundStyle(.red)
+            Text(model.restrictionStatus == "permanent" ? "Account permanently banned" : "Account restricted").font(.title2.bold())
+            Text(model.restrictionReason).foregroundStyle(.secondary)
+            if model.myAppealStatus == "pending" || model.myAppealStatus == "under_review" {
+                Label("Your appeal is \(model.myAppealStatus ?? "pending")",systemImage:"clock").foregroundStyle(.orange)
+                Text("A moderator will review your appeal. Your account remains restricted while it is being reviewed.")
+            } else {
+                Text("If you believe this decision was made in error, you can submit one appeal for moderator review.")
+                TextEditor(text:$explanation).frame(minHeight:150).padding(8).background(Color.white.opacity(0.06)).clipShape(RoundedRectangle(cornerRadius:12))
+                Button("Submit appeal") { Task { await model.submitAppeal(explanation) } }
+                    .buttonStyle(.borderedProminent).disabled(explanation.trimmingCharacters(in:.whitespacesAndNewlines).count < 20)
+            }
+            if let error=model.errorMessage { Text(error).font(.footnote).foregroundStyle(.red) }
+            Button("Sign out",role:.destructive) { model.signOut() }
+            Spacer()
+        }.padding(24).frame(maxWidth:.infinity,maxHeight:.infinity).background(skillectBlack.ignoresSafeArea())
+    }
+}
+
 struct SignInView: View {
     @ObservedObject var model: AppModel
     @State private var email = ""
     @State private var password = ""
+    @State private var displayName = ""
+    @State private var username = ""
+    @State private var mode = "Sign in"
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             Spacer()
             Text("Skillect").font(.system(size: 38, weight: .heavy, design: .rounded)).foregroundStyle(skillectBlue)
-            Text("Grow skills. Share progress. Build together.").foregroundStyle(.secondary).padding(.bottom, 20)
+            Text("Grow skills. Share progress. Build together.").foregroundStyle(.secondary).padding(.bottom, 14)
+            if mode == "Sign up" {
+                TextField("Your name", text: $displayName).textFieldStyle(.roundedBorder)
+                TextField("Username", text: $username).textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder)
+            }
             TextField("Email", text: $email).textInputAutocapitalization(.never).keyboardType(.emailAddress).autocorrectionDisabled().textFieldStyle(.roundedBorder)
-            SecureField("Password", text: $password).textFieldStyle(.roundedBorder)
+            if mode != "Reset password" { SecureField("Password (minimum 8 characters)", text: $password).textFieldStyle(.roundedBorder) }
             if let error = model.errorMessage { Text(error).font(.footnote).foregroundStyle(.red) }
-            Button { Task { await model.signIn(email: email, password: password) } } label: {
+            Button {
+                Task {
+                    switch mode {
+                    case "Sign up": await model.signUp(email: email, password: password, displayName: displayName, username: username)
+                    case "Reset password": await model.sendPasswordReset(email: email)
+                    default: await model.signIn(email: email, password: password)
+                    }
+                }
+            } label: {
                 HStack {
                     if model.isBusy { ProgressView().tint(.white) }
-                    Text(model.isBusy ? "Please wait…" : "Sign in").fontWeight(.semibold)
+                    Text(model.isBusy ? "Please wait…" : mode).fontWeight(.semibold)
                 }.frame(maxWidth: .infinity).padding(.vertical, 14)
-            }.buttonStyle(.borderedProminent).disabled(model.isBusy || email.isEmpty || password.isEmpty)
-            Text("Create your account using the existing Skillect sign-up flow, then confirm your email before signing in.")
-                .font(.caption).foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(model.isBusy || !email.contains("@") || (mode != "Reset password" && password.count < 8) || (mode == "Sign up" && (displayName.isEmpty || username.count < 3)))
+            if mode == "Sign in" {
+                Button("Forgot password?") { mode = "Reset password"; model.errorMessage = nil }
+            }
+            Button(mode == "Sign up" ? "Already have an account? Sign in" : "New to Skillect? Create account") {
+                mode = mode == "Sign up" ? "Sign in" : "Sign up"
+                model.errorMessage = nil
+            }
             Spacer()
-        }.padding(26).background(Color.white.ignoresSafeArea())
+        }
+        .padding(26)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(skillectBlack.ignoresSafeArea())
     }
 }
 
@@ -71,11 +127,9 @@ struct MainTabs: View {
             .padding(.horizontal, 22).frame(height: 72)
             .background(skillectBlack)
             TabView {
-                FeedView(model: model).tabItem { Label("Feed", systemImage: "house") }
+                FeedView(model: model).tabItem { Label("Home", systemImage: "house") }
                 ExploreView(model: model).tabItem { Label("Explore", systemImage: "safari") }
-                CommunitiesView(model: model).tabItem { Label("Communities", systemImage: "person.3") }
                 CreateView(model: model).tabItem { Label("Create", systemImage: "plus.square") }
-                MessagesPlaceholder().tabItem { Label("Messages", systemImage: "bubble.left") }
                 ProfileView(model: model).tabItem { Label("Profile", systemImage: "person") }
             }
             .toolbarBackground(skillectBlack, for: .tabBar)
@@ -89,14 +143,122 @@ private struct EmptyFeedScreen: View {
     var body: some View { skillectBlack.ignoresSafeArea() }
 }
 
-private struct MessagesPlaceholder: View {
-    var body: some View { skillectBlack.ignoresSafeArea() }
+
+private struct NotificationsView: View {
+    @ObservedObject var model: AppModel
+    var body: some View {
+        NavigationStack {
+            List {
+                if model.notifications.isEmpty {
+                    Text("You’re all caught up. New activity will appear here.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(model.notifications) { notification in
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: notification.read ? "bell" : "bell.badge.fill")
+                            .foregroundColor(notification.read ? Color(uiColor: .secondaryLabel) : Color.blue)
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(notification.type.replacingOccurrences(of: "_", with: " ").capitalized)
+                                .font(.headline)
+                            Text(notification.message ?? "You have a new notification")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                            if !notification.read {
+                                Button("Mark as read") {
+                                    Task { await model.markNotificationRead(notification.id) }
+                                }.font(.caption)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                        if !notification.read {
+                            Circle().fill(.blue).frame(width: 7, height: 7)
+                        }
+                    }.padding(.vertical, 5)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(skillectBlack)
+            .navigationTitle("Notifications")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Refresh") { Task { await model.loadDirectory() } }
+                }
+            }
+        }
+    }
+}
+
+private struct MessagesView: View {
+    @ObservedObject var model: AppModel
+    @State private var draft = ""
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let conversationId = model.activeConversationId {
+                    VStack(spacing: 0) {
+                        HStack {
+                            Button("Back") { model.activeConversationId = nil; model.chatMessages = []; Task { await model.loadConversations() } }
+                            Spacer()
+                            Text("Conversation").font(.headline)
+                            Spacer()
+                            Button("Refresh") { Task { await model.loadChatMessages(conversationId) } }
+                        }.padding()
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 10) {
+                                ForEach(model.chatMessages) { message in
+                                    HStack {
+                                        if message.sender_id == model.userId { Spacer(minLength: 35) }
+                                        Text(message.content).padding(12).background(message.sender_id == model.userId ? skillectBlue.opacity(0.25) : Color.white.opacity(0.08)).clipShape(RoundedRectangle(cornerRadius: 14))
+                                            .contextMenu {
+                                                if message.sender_id != model.userId {
+                                                    Button("Report message", systemImage: "exclamationmark.shield") { Task { await model.reportMessage(message) } }
+                                                    Button("Block sender", systemImage: "hand.raised.slash", role: .destructive) { Task { await model.blockUser(message.sender_id) } }
+                                                }
+                                            }
+                                        if message.sender_id != model.userId { Spacer(minLength: 35) }
+                                    }
+                                }
+                            }.padding()
+                        }
+                        HStack {
+                            TextField("Write a message", text: $draft, axis: .vertical).textFieldStyle(.roundedBorder)
+                            Button("Send") {
+                                let outgoing = draft
+                                draft = ""
+                                Task { await model.sendChatMessage(outgoing) }
+                            }.disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }.padding()
+                    }
+                } else {
+                    List(model.conversations) { conversation in
+                        Button(conversation.title) {
+                            model.activeConversationId = conversation.id
+                            Task { await model.loadChatMessages(conversation.id) }
+                        }
+                    }.overlay {
+                        if model.conversations.isEmpty {
+                            ContentUnavailableView("No messages yet", systemImage: "bubble.left", description: Text("Find someone in Explore and tap Message to start a conversation."))
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Messages")
+            .toolbar {
+                if model.activeConversationId == nil {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Refresh") { Task { await model.loadConversations() } }
+                    }
+                }
+            }
+            .task { await model.loadConversations() }
+        }
+    }
 }
 
 private struct PostCard: View {
     let post: FeedPost
     @ObservedObject var model: AppModel
     @State private var showComments = false
+    @State private var videoPlayer: AVPlayer?
     private var displayName: String {
         if let name = post.profiles?.displayName, !name.isEmpty { return name }
         if let username = post.profiles?.username, !username.isEmpty { return username }
@@ -112,26 +274,38 @@ private struct PostCard: View {
                 Spacer()
                 Menu {
                     Button("Save post", systemImage: "bookmark") { Task { await model.toggleSave(post) } }
-                    Button("Report post", systemImage: "flag") { Task { await model.reportPost(post.id) } }
+                    Button("Sexual content or nudity", systemImage: "exclamationmark.shield") { Task { await model.reportPost(post.id, reason: "sexual_content_or_nudity") } }
+                    Button("Harassment or hate", systemImage: "hand.raised") { Task { await model.reportPost(post.id, reason: "harassment_or_hate") } }
+                    Button("Violence or self-harm", systemImage: "exclamationmark.triangle") { Task { await model.reportPost(post.id, reason: "violence_or_self_harm") } }
+                    Button("Spam or scam", systemImage: "flag") { Task { await model.reportPost(post.id, reason: "spam_or_scam") } }
+                    Button("Other", systemImage: "ellipsis") { Task { await model.reportPost(post.id, reason: "other") } }
                 } label: { Image(systemName: "ellipsis").foregroundStyle(.secondary).padding(8) }
             }
             Text(post.content).foregroundStyle(Color.primary).frame(maxWidth: .infinity, alignment: .leading)
             if let imageURL = post.imageURL, let url = URL(string: imageURL) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image): image.resizable().scaledToFill()
-                    case .failure: Text("Image unavailable").font(.caption).foregroundStyle(.secondary)
-                    default: ProgressView()
-                    }
-                }.frame(maxWidth: .infinity).frame(height: 190).clipShape(RoundedRectangle(cornerRadius: 14))
+                if post.media_type == "video" {
+                    VideoPlayer(player: videoPlayer)
+                        .frame(maxWidth: .infinity).frame(height: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .onAppear { if videoPlayer == nil { videoPlayer = AVPlayer(url: url) } }
+                        .onDisappear { videoPlayer?.pause() }
+                } else {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image): image.resizable().scaledToFill()
+                        case .failure: Text("Image unavailable").font(.caption).foregroundStyle(.secondary)
+                        default: ProgressView()
+                        }
+                    }.frame(maxWidth: .infinity).frame(height: 190).clipShape(RoundedRectangle(cornerRadius: 14))
+                }
             }
             HStack {
                 Button { Task { await model.toggleLike(post) } } label: {
                     Label("\(post.likes_count)", systemImage: model.likedIds.contains(post.id) ? "heart.fill" : "heart")
-                        .foregroundStyle(model.likedIds.contains(post.id) ? .pink : .secondary)
+                        .foregroundColor(model.likedIds.contains(post.id) ? Color(uiColor: .systemPink) : Color(uiColor: .secondaryLabel))
                 }
                 Spacer()
-                Button { showComments = true; Task { await model.loadComments(postId: post.id) } } label: {
+                Button { showComments = true; model.activeCommentsPostId = post.id; Task { await model.loadComments(postId: post.id) } } label: {
                     Label("\(post.comments_count)", systemImage: "bubble.right").foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -144,7 +318,7 @@ private struct PostCard: View {
         .padding(16)
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 18))
-        .sheet(isPresented: $showComments) { CommentsView(model: model, postId: post.id) }
+        .sheet(isPresented: $showComments, onDismiss: { model.activeCommentsPostId = nil }) { CommentsView(model: model, postId: post.id) }
     }
 }
 
@@ -178,23 +352,56 @@ struct FeedView: View {
 struct CreateView: View {
     @ObservedObject var model: AppModel
     @State private var text = ""
+    @State private var selectedVideo: PhotosPickerItem?
+    @State private var selectedVideoData: Data?
+    @State private var selectedVideoMime = "video/mp4"
+    @State private var selectedVideoName = "skillect-video.mp4"
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Share what you're learning, making or discovering.")
                     .foregroundStyle(.secondary)
                 TextEditor(text: $text)
-                    .frame(minHeight: 220)
+                    .frame(minHeight: 180)
                     .padding(8)
                     .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.gray.opacity(0.2)))
+                PhotosPicker(selection: $selectedVideo, matching: .videos, photoLibrary: .shared()) {
+                    Label(selectedVideoData == nil ? "Choose video" : "Change video", systemImage: "video")
+                        .frame(maxWidth: .infinity).padding(.vertical, 10)
+                }
+                .buttonStyle(.bordered)
+                .onChange(of: selectedVideo) { _, item in
+                    guard let item else { return }
+                    Task {
+                        if let data = try? await item.loadTransferable(type: Data.self) {
+                            selectedVideoData = data
+                            selectedVideoMime = item.supportedContentTypes.first?.preferredMIMEType ?? "video/mp4"
+                            selectedVideoName = "skillect-video." + (selectedVideoMime == "video/webm" ? "webm" : selectedVideoMime == "video/quicktime" ? "mov" : "mp4")
+                        }
+                    }
+                }
+                Text("MP4, WebM or MOV · up to 50 MB · videos stay private until a moderator approves them")
+                    .font(.caption).foregroundStyle(.secondary)
+                if let info = model.infoMessage { Text(info).font(.caption).foregroundStyle(skillectBlue) }
                 Button {
-                    Task { await model.createPost(text); if model.errorMessage == nil { text = "" } }
+                    Task {
+                        if let videoData = selectedVideoData {
+                            await model.submitVideoPost(text, videoData: videoData, mimeType: selectedVideoMime, fileName: selectedVideoName)
+                        } else {
+                            await model.createPost(text)
+                        }
+                        if model.errorMessage == nil {
+                            text = ""
+                            selectedVideo = nil
+                            selectedVideoData = nil
+                        }
+                    }
                 } label: {
                     HStack { if model.isBusy { ProgressView().tint(.white) }; Text("Publish post").fontWeight(.semibold) }
                         .frame(maxWidth: .infinity).padding(.vertical, 13)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isBusy)
+                .disabled((text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedVideoData == nil) || model.isBusy)
                 if let error = model.errorMessage { Text(error).font(.caption).foregroundStyle(.red) }
                 Spacer()
             }.padding().navigationTitle("Create")
@@ -215,6 +422,11 @@ struct CommentsView: View {
                         Text(comment.profiles?.displayName ?? comment.profiles?.username ?? "Member").font(.headline)
                         Text(comment.content)
                     }
+                    .contextMenu {
+                        Button("Report comment", systemImage: "exclamationmark.shield") {
+                            Task { await model.reportComment(comment.id) }
+                        }
+                    }
                 }
                 HStack {
                     TextField("Write a comment", text: $draft).textFieldStyle(.roundedBorder)
@@ -233,7 +445,6 @@ struct CommentsView: View {
 struct ExploreView: View {
     @ObservedObject var model: AppModel
     @State private var query = ""
-    @State private var following = Set<String>()
     var filtered: [DirectoryProfile] {
         guard !query.isEmpty else { return model.directory }
         return model.directory.filter { $0.username.localizedCaseInsensitiveContains(query) || $0.display_name.localizedCaseInsensitiveContains(query) || $0.bio.localizedCaseInsensitiveContains(query) }
@@ -252,12 +463,10 @@ struct ExploreView: View {
                         }
                         Spacer()
                         if person.id != model.userId {
-                            Button(following.contains(person.id) ? "Following" : "Follow") {
-                                Task {
-                                    await model.toggleFollow(person.id)
-                                    if following.contains(person.id) { following.remove(person.id) } else { following.insert(person.id) }
-                                }
+                            Button(model.followingIds.contains(person.id) ? "Following" : "Follow") {
+                                Task { await model.toggleFollow(person.id) }
                             }.buttonStyle(.bordered)
+                            Button("Message") { Task { await model.startConversation(with: person.id) } }.buttonStyle(.bordered)
                             Button("Block") { Task { await model.blockUser(person.id) } }.buttonStyle(.bordered)
                         }
                     }
@@ -309,39 +518,101 @@ struct CommunitiesView: View {
     @ObservedObject var model: AppModel
     var body: some View {
         NavigationStack {
-            List(model.communities) { community in
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(community.name).font(.headline)
-                    Text(community.description).foregroundStyle(.secondary)
-                    HStack {
-                        Text("\(community.member_count) members").font(.caption).foregroundStyle(.secondary)
-                        Spacer()
-                        Button("Join") { Task { await model.joinCommunity(community.id) } }.buttonStyle(.bordered)
+            Group {
+                if model.communities.isEmpty {
+                    ContentUnavailableView("No communities yet", systemImage: "person.3", description: Text("These spaces will appear when learners create real communities. Placeholder groups are hidden."))
+                } else {
+                    List(model.communities) { community in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(community.name).font(.headline)
+                            Text(community.description).foregroundStyle(.secondary)
+                            HStack {
+                                Text("\(community.member_count) members").font(.caption).foregroundStyle(.secondary)
+                                Spacer()
+                                Button(model.joinedCommunityIds.contains(community.id) ? "Joined" : "Join") { Task { await model.joinCommunity(community.id) } }.buttonStyle(.bordered).disabled(model.joinedCommunityIds.contains(community.id))
+                            }
+                        }.padding(.vertical, 5)
                     }
-                }.padding(.vertical, 5)
+                }
             }.navigationTitle("Communities").task { await model.loadDirectory() }
         }
     }
 }
 
-struct NotificationsView: View {
-    @ObservedObject var model: AppModel
-    var body: some View {
-        NavigationStack {
-            List(model.notifications) { notification in
-                Button { Task { await model.markNotificationRead(notification.id) } } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(notification.message ?? notification.type.capitalized).foregroundStyle(.primary)
-                            Text(notification.type).font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if !notification.read { Circle().fill(skillectBlue).frame(width: 8, height: 8) }
-                    }
-                }
-            }.navigationTitle("Notifications").task { await model.loadDirectory() }
-        }
+
+struct ModerationView: View {
+ @ObservedObject var model: AppModel
+ var body: some View {
+  NavigationStack {
+   List {
+    Section("Reports awaiting review") {
+     if model.moderationReports.isEmpty { Text("No pending reports").foregroundStyle(.secondary) }
+     ForEach(model.moderationReports) { report in
+      VStack(alignment:.leading,spacing:8) {
+       Text("\(report.target_type.capitalized) · \(report.reason.replacingOccurrences(of: "_", with: " "))").font(.headline)
+       Text("Target: \(report.target_id)").font(.caption).foregroundStyle(.secondary)
+       if let details=report.details,!details.isEmpty { Text(details).font(.subheadline) }
+       HStack {
+        Button("Resolve") { Task { await model.resolveReport(report) } }.buttonStyle(.bordered)
+        Button("Permanently ban") { Task { await model.permanentlyBanReportedUser(report) } }.buttonStyle(.borderedProminent).tint(.red)
+       }
+      }.padding(.vertical,6)
+     }
     }
+    Section("Videos awaiting approval") {
+     if model.moderationMediaCases.isEmpty { Text("No videos awaiting review").foregroundStyle(.secondary) }
+     ForEach(model.moderationMediaCases) { item in
+      VStack(alignment:.leading,spacing:8) {
+       Text("Pending video · " + (item.mime_type ?? "video")).font(.headline)
+       if let preview = item.preview_url, let previewURL = URL(string: preview) {
+        VideoPlayer(player: AVPlayer(url: previewURL)).frame(maxWidth:.infinity).frame(height:220)
+       } else {
+        Text("Private preview unavailable").font(.caption).foregroundStyle(.secondary)
+       }
+       if let caption = item.post_content, !caption.isEmpty { Text(caption) }
+       Text("Account: \\(item.owner_id)").font(.caption).foregroundStyle(.secondary)
+       HStack {
+        Button("Approve") { Task { await model.reviewVideoCase(item,approve:true) } }.buttonStyle(.borderedProminent)
+        Button("Reject") { Task { await model.reviewVideoCase(item,approve:false) } }.buttonStyle(.bordered).tint(.red)
+       }
+      }.padding(.vertical,6)
+     }
+    }
+    Section("Flagged text awaiting review") {
+     if model.moderationTextCases.isEmpty { Text("No blocked text cases").foregroundStyle(.secondary) }
+     ForEach(model.moderationTextCases) { item in
+      VStack(alignment:.leading,spacing:8) {
+       Text(item.content_type.capitalized + " · " + item.reason).font(.headline)
+       Text(item.content_snapshot)
+       Text("Account: \\(item.user_id)").font(.caption).foregroundStyle(.secondary)
+       HStack {
+        Button("Mark reviewed") { Task { await model.reviewTextCase(item,ban:false) } }.buttonStyle(.bordered)
+        Button("Permanently ban") { Task { await model.reviewTextCase(item,ban:true) } }.buttonStyle(.borderedProminent).tint(.red)
+       }
+      }.padding(.vertical,6)
+     }
+    }
+    Section("Appeals") {
+     if model.moderationAppeals.isEmpty { Text("No pending appeals").foregroundStyle(.secondary) }
+     ForEach(model.moderationAppeals) { appeal in
+      VStack(alignment:.leading,spacing:8) {
+       Text("Account appeal · \(appeal.status.capitalized)").font(.headline)
+       Text(appeal.explanation)
+       Text("Account: \(appeal.user_id)").font(.caption).foregroundStyle(.secondary)
+       HStack {
+        Button("Accept and lift ban") { Task { await model.reviewAppeal(appeal,accept:true) } }.buttonStyle(.borderedProminent)
+        Button("Reject") { Task { await model.reviewAppeal(appeal,accept:false) } }.buttonStyle(.bordered).tint(.red)
+       }
+      }.padding(.vertical,6)
+     }
+    }
+   }
+   .scrollContentBackground(.hidden).background(skillectBlack)
+   .navigationTitle("Safety moderation")
+   .toolbar { ToolbarItem(placement:.topBarTrailing) { Button("Refresh") { Task { await model.loadModerationQueue() } } } }
+   .task { await model.loadModerationQueue() }
+  }
+ }
 }
 
 struct ProfileView: View {
@@ -360,6 +631,14 @@ struct ProfileView: View {
                 Section("Your activity") {
                     LabeledContent("Posts", value: "\(model.posts.filter { $0.authorId == model.userId }.count)")
                     LabeledContent("Projects", value: "\(model.projects.filter { $0.id.isEmpty == false }.count)")
+                }
+                Section("Your spaces") {
+                    NavigationLink("Messages") { MessagesView(model: model) }
+                    NavigationLink("Communities") { CommunitiesView(model: model) }
+                    NavigationLink("Notifications") { NotificationsView(model: model) }
+                    if model.isModerator {
+                        NavigationLink("Safety moderation") { ModerationView(model: model) }
+                    }
                 }
                 Section {
                     Button("Sign out", role: .destructive) { model.signOut() }

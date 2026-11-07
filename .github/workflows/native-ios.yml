@@ -9,13 +9,14 @@ on:
     branches:
       - native/android-ios-foundation
       - native/skillect-ui-parity
+      - native/complete-social-app-phase-1-auth
     paths:
       - "native/ios/**"
       - ".github/workflows/native-ios.yml"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -26,20 +27,20 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - name: Build iOS simulator app
+      - name: Build Release configuration for iOS Simulator
         run: |
           xcodebuild -project native/ios/Skillect.xcodeproj \
             -scheme Skillect \
             -sdk iphonesimulator \
-            -configuration Debug \
+            -configuration Release \
             -derivedDataPath build/ios \
             CODE_SIGNING_ALLOWED=NO
       - name: Package simulator app
         run: |
-          cd build/ios/Build/Products/Debug-iphonesimulator
-          zip -r "$GITHUB_WORKSPACE/Skillect-iOS-Simulator.zip" Skillect.app
+          cd build/ios/Build/Products/Release-iphonesimulator
+          zip -r "$GITHUB_WORKSPACE/Skillect-iOS-Release-Simulator.zip" Skillect.app
       - uses: actions/upload-artifact@v4
         with:
-          name: skillect-native-ios-simulator
-          path: Skillect-iOS-Simulator.zip
+          name: skillect-native-ios-release-simulator
+          path: Skillect-iOS-Release-Simulator.zip
           retention-days: 14
