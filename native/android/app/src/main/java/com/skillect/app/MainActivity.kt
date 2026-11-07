@@ -236,10 +236,10 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                 val r=textCases.getJSONObject(i)
                 ModerationRow(r.optString("id"),r.optString("content_type")+" · "+r.optString("reason"),r.optString("content_snapshot"),r.optString("user_id"),"text_case",r.optString("reason"))
             }
-            val mediaCases=apiArray("/rest/v1/media_assets?select=id,owner_id,status,decision_reason,created_at,media_type,mime_type,post_content&status=eq.pending&media_type=eq.video&reviewed_at=is.null&order=created_at.asc&limit=100",active)
+            val mediaCases=apiArray("/rest/v1/media_assets?select=id,owner_id,status,decision_reason,created_at,media_type,mime_type,post_content&status=eq.pending&media_type=in.(video,image)&reviewed_at=is.null&order=created_at.asc&limit=100",active)
             val loadedMediaCases=(0 until mediaCases.length()).map { i ->
                 val r=mediaCases.getJSONObject(i)
-                ModerationRow(r.optString("id"),"Pending video · "+r.optString("mime_type"),r.optString("post_content"),r.optString("owner_id"),"video_case","pending")
+                ModerationRow(r.optString("id"),"Pending media · "+r.optString("mime_type"),r.optString("post_content"),r.optString("owner_id"),"video_case","pending")
             }
             val withPreviews=mutableListOf<ModerationRow>()
             for(row in loadedMediaCases) {
@@ -890,7 +890,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                                 }
                             }
                             item { Text("Videos awaiting approval",fontWeight=FontWeight.Bold,color=Ink,modifier=Modifier.padding(top=12.dp)) }
-                            if(moderationMediaCases.isEmpty()) item { Text("No videos awaiting review",color=Color.Gray) }
+                            if(moderationMediaCases.isEmpty()) item { Text("No media awaiting review",color=Color.Gray) }
                             items(moderationMediaCases,key={"video-case-"+it.id}) { row ->
                                 Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=Color(0xFF171720))) {
                                     Column(Modifier.padding(14.dp)) {
