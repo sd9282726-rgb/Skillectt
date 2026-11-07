@@ -7,6 +7,7 @@ import {
   PlusSquare,
   MessageCircle,
   User as UserIcon,
+  Bell,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 
@@ -16,6 +17,7 @@ const NAV_ITEMS = [
   { href: "/communities", label: "Communities", icon: Users },
   { href: "/create", label: "Create", icon: PlusSquare },
   { href: "/messages", label: "Messages", icon: MessageCircle },
+  { href: "/notifications", label: "Alerts", icon: Bell },
   { href: "/profile", label: "Profile", icon: UserIcon },
 ];
 
