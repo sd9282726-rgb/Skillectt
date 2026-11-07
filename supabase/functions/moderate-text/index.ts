@@ -75,6 +75,11 @@ Deno.serve(async (request: Request) => {
   let input: Record<string, any>;
   try { input = await request.json(); } catch { return json(400, { error: "Invalid JSON" }); }
   const type = String(input.type || "");
+  const rawContent = String(input.content || "").trim();
+  const postTags = type === "post" && Array.isArray(input.tags)
+    ? input.tags.map((item: unknown) => String(item).trim().replace(/^#/, "").slice(0, 30)).filter(Boolean).slice(0, 10)
+    : [];
+  const postCategory = type === "post" ? String(input.category || "").trim().slice(0, 64) : "";
   const profileFields = type === "profile"
     ? [
         String(input.display_name || ""),
@@ -89,10 +94,12 @@ Deno.serve(async (request: Request) => {
   const projectFields = type === "project"
     ? [String(input.title || ""), String(input.description || ""), String(input.link || "")]
     : [];
-  const content = (type === "profile" ? profileFields.join("\n") : type === "project" ? projectFields.join("\n") : String(input.content || "")).trim();
+  const postFields = type === "post" ? [rawContent, postCategory, ...postTags] : [];
+  const moderationText = (type === "profile" ? profileFields.join("\n") : type === "project" ? projectFields.join("\n") : type === "post" ? postFields.join("\n") : rawContent).trim();
+  const content = rawContent || moderationText;
   if (!["post", "comment", "message", "profile", "media_caption", "project"].includes(type)) return json(400, { error: "Unsupported content type" });
-  const maxLength = type === "post" || type === "media_caption" ? 5000 : type === "comment" ? 1500 : type === "profile" ? 1500 : type === "project" ? 2500 : 2000;
-  if (!content || content.length > maxLength) return json(400, { error: "Text is empty or exceeds the allowed length" });
+  const maxLength = type === "post" || type === "media_caption" ? 5000 : type === "comment" ? 1500 : type === "profile" ? 2500 : type === "project" ? 2500 : 2000;
+  if (!moderationText || moderationText.length > maxLength) return json(400, { error: "Text is empty or exceeds the allowed length" });
 
   try {
     const restrictions = await rest(base, service, "account_enforcements?select=status&user_id=eq." + encodeURIComponent(userId) + "&limit=1");
@@ -139,7 +146,7 @@ Deno.serve(async (request: Request) => {
   }
 
   const form = new FormData();
-  form.append("text", content);
+  form.append("text", moderationText);
   form.append("lang", "en");
   form.append("mode", "rules,ml");
   form.append("models", "general,self-harm");
@@ -166,7 +173,7 @@ Deno.serve(async (request: Request) => {
       await rest(base, service, "moderation_text_cases", "POST", {
         user_id: userId,
         content_type: type,
-        content_snapshot: content,
+        content_snapshot: moderationText,
         reason: flags.join(","),
         provider_reference: scan?.request?.id ?? null,
         status: "blocked",
@@ -212,10 +219,10 @@ Deno.serve(async (request: Request) => {
     record = {
       author_id: userId,
       content,
-      tags: Array.isArray(input.tags) ? input.tags.slice(0, 10) : [],
+      tags: postTags,
       image_url: imageUrl,
     };
-    if (input.category) record.category = String(input.category).slice(0, 64);
+    if (postCategory) record.category = postCategory;
     if (communityId) record.community_id = communityId;
   } else if (type === "comment") {
     record = { post_id: String(input.post_id), author_id: userId, content };
