@@ -25,6 +25,16 @@ Deno.serve(async (request: Request) => {
   if (!allowed.has(file.type)) return json(415, { error: "Unsupported image type" });
   if (file.size < 1 || file.size > 12 * 1024 * 1024 || caption.length > 5000) return json(413, { error: "Image must be 12 MB or smaller and caption no longer than 5,000 characters" });
 
+  const captionCheck = await fetch(base + "/functions/v1/moderate-text", {
+    method: "POST",
+    headers: { apikey: anon, Authorization: authorization, "Content-Type": "application/json" },
+    body: JSON.stringify({ type: "media_caption", content: caption }),
+  });
+  const captionDecision = captionCheck.ok ? await captionCheck.json() : null;
+  if (!captionCheck.ok || captionDecision?.status !== "approved") {
+    return json(captionCheck.status || 503, { error: captionDecision?.error || "Caption safety screening failed. Nothing was published." });
+  }
+
   const extension = file.type === "image/jpeg" ? "jpg" : file.type.split("/")[1];
   const path = userId + "/" + crypto.randomUUID() + "." + extension;
   const storageHeaders = { ...adminHeaders(service), "Content-Type": file.type, "x-upsert": "false" };
