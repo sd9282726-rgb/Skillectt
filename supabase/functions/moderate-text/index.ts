@@ -25,6 +25,22 @@ async function rest(base: string, key: string, path: string, method = "GET", bod
   return text ? JSON.parse(text) : null;
 }
 
+
+function isAtLeast16(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const match = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const birth = new Date(Date.UTC(year, month - 1, day));
+  if (birth.getUTCFullYear() !== year || birth.getUTCMonth() !== month - 1 || birth.getUTCDate() !== day) return false;
+  const now = new Date();
+  let age = now.getUTCFullYear() - year;
+  if (now.getUTCMonth() < month - 1 || (now.getUTCMonth() === month - 1 && now.getUTCDate() < day)) age--;
+  return age >= 16 && birth.getTime() <= now.getTime();
+}
+
 function ruleMatches(scan: Record<string, any>): string[] {
   const flagged: string[] = [];
   const keys = ["profanity", "personal", "link", "drug", "weapon", "spam", "content-trade", "money-transaction", "extremism", "violence", "self-harm", "medical"];
@@ -98,6 +114,19 @@ Deno.serve(async (request: Request) => {
   const moderationText = (type === "profile" ? profileFields.join("\n") : type === "project" ? projectFields.join("\n") : type === "post" ? postFields.join("\n") : rawContent).trim();
   const content = rawContent || moderationText;
   if (!["post", "comment", "message", "profile", "media_caption", "project"].includes(type)) return json(400, { error: "Unsupported content type" });
+
+  if (type !== "profile") {
+    try {
+      const profiles = await rest(base, service, "profiles?select=onboarded,date_of_birth&id=eq." + encodeURIComponent(userId) + "&limit=1");
+      const profile = Array.isArray(profiles) ? profiles[0] : null;
+      if (!profile?.onboarded || !isAtLeast16(profile.date_of_birth)) {
+        return json(403, { error: "Complete your profile and verify that you are 16 or older before publishing or interacting." });
+      }
+    } catch {
+      return json(503, { error: "Could not verify your 16+ profile. Nothing was published." });
+    }
+  }
+
   const maxLength = type === "post" || type === "media_caption" ? 5000 : type === "comment" ? 1500 : type === "profile" ? 2500 : type === "project" ? 2500 : 2000;
   if (!moderationText || moderationText.length > maxLength) return json(400, { error: "Text is empty or exceeds the allowed length" });
 
