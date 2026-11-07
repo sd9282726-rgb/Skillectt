@@ -101,6 +101,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     var likedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var savedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var tab by remember { mutableStateOf("Home") }
+    var feedMode by remember { mutableStateOf("For you") }
     var refresh by remember { mutableIntStateOf(0) }
     var createText by remember { mutableStateOf("") }
     var searchText by remember { mutableStateOf("") }
@@ -150,7 +151,20 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
 
     suspend fun loadFeed() {
         try {
-            val arr = apiArray("/rest/v1/posts?select=id,author_id,content,image_url,media_type,likes_count,comments_count,profiles(display_name,username)&moderation_hidden=eq.false&order=created_at.desc&limit=50", token)
+            val me = userId
+            val followingIds = if (feedMode == "Following" && me != null) {
+                val following = apiArray("/rest/v1/follows?select=following_id&follower_id=eq.$me", token)
+                (0 until following.length()).map { following.getJSONObject(it).optString("following_id") }.filter { it.isNotBlank() }
+            } else emptyList()
+            if (feedMode == "Following" && followingIds.isEmpty()) {
+                posts = emptyList()
+                likedIds = emptySet()
+                savedIds = emptySet()
+                return
+            }
+            val authorFilter = if (feedMode == "Following") "&author_id=in.(" + followingIds.joinToString(",") + ")" else ""
+            val feedPath = "/rest/v1/posts?select=id,author_id,content,image_url,media_type,likes_count,comments_count,profiles(display_name,username)" + authorFilter + "&moderation_hidden=eq.false&order=created_at.desc&limit=50"
+            val arr = apiArray(feedPath, token)
             posts = (0 until arr.length()).map { i ->
                 val p = arr.getJSONObject(i)
                 postFromJson(p)
@@ -499,15 +513,17 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                                     }
                                 }
                             }
-                            Row(Modifier.fillMaxWidth().padding(top=10.dp), horizontalArrangement=Arrangement.SpaceBetween, verticalAlignment=Alignment.CenterVertically) {
-                                Text("For you", fontSize=18.sp, fontWeight=FontWeight.Bold, color=Ink)
+                            Row(Modifier.fillMaxWidth().padding(top=10.dp), horizontalArrangement=Arrangement.spacedBy(8.dp), verticalAlignment=Alignment.CenterVertically) {
+                                FilterChip(selected=feedMode=="For you", onClick={feedMode="For you";scope.launch{loadFeed()}}, label={Text("For you")})
+                                FilterChip(selected=feedMode=="Following", onClick={if(requireAccount()){feedMode="Following";scope.launch{loadFeed()}}}, label={Text("Following")})
+                                Spacer(Modifier.weight(1f))
                                 TextButton(onClick={scope.launch{loadFeed()}}){Text("Refresh")}
                             }
                         }
                         if(posts.isEmpty()) {
                             Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement=Arrangement.Center) {
-                                Text("Your feed is ready", color=Ink, fontSize=20.sp, fontWeight=FontWeight.Bold)
-                                Text("Follow people, join communities, or create your first skill update.", color=MutedNav, modifier=Modifier.padding(top=8.dp))
+                                Text(if(feedMode=="Following") "Your following feed is empty" else "Your feed is ready", color=Ink, fontSize=20.sp, fontWeight=FontWeight.Bold)
+                                Text(if(feedMode=="Following") "Explore creators and follow people to see their latest posts here." else "Follow people, join communities, or create your first skill update.", color=MutedNav, modifier=Modifier.padding(top=8.dp))
                                 Button(onClick={if(requireAccount()) tab="Create"}, modifier=Modifier.padding(top=16.dp)){Text("Create a post")}
                             }
                         }
@@ -665,6 +681,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                             savedIds = emptySet()
                             selectedPerson = null
                             selectedPersonPosts = emptyList()
+                            feedMode = "For you"
                             tab = "Home"
                             onSignOut()
                         }){Text("Sign out", color=Color.Red)}
