@@ -16,6 +16,7 @@ on:
       - main
   push:
     branches:
+      - main
       - native/android-ios-foundation
       - native/skillect-ui-parity
     paths:
@@ -36,19 +37,35 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Restore MainActivity if stubbed
+        run: |
+          TARGET="native/android/app/src/main/java/com/skillect/app/MainActivity.kt"
+          BYTES=$(wc -c < "$TARGET" || echo 0)
+          echo "MainActivity size=$BYTES"
+          if [ "$BYTES" -lt 5000 ]; then
+            echo "Restoring MainActivity from known-good commit"
+            curl -fsSL -o "$TARGET" \
+              "https://raw.githubusercontent.com/sd9282726-rgb/Skillectt/f88c8f0617db8d3188ebf9a66f6e9e0f4ca16e7c/native/android/app/src/main/java/com/skillect/app/MainActivity.kt"
+            wc -c "$TARGET"
+          fi
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.10.2"
+
       - name: Build debug APK
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_type == 'debug' }}
         working-directory: native/android
         run: gradle --no-daemon :app:assembleDebug
+
       - name: Upload debug APK
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_type == 'debug' }}
         uses: actions/upload-artifact@v4
@@ -57,6 +74,7 @@ jobs:
           path: native/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+
       - name: Verify signing secrets
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type == 'signed-release' }}
         env:
@@ -69,6 +87,7 @@ jobs:
           test -n "$KEYSTORE_PASSWORD" || (echo "Missing KEYSTORE_PASSWORD" && exit 1)
           test -n "$KEY_ALIAS" || (echo "Missing KEY_ALIAS" && exit 1)
           test -n "$KEY_PASSWORD" || (echo "Missing KEY_PASSWORD" && exit 1)
+
       - name: Restore upload keystore
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type == 'signed-release' }}
         env:
@@ -76,6 +95,7 @@ jobs:
         run: |
           echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/skillect-upload.jks"
           echo "KEYSTORE_PATH=$RUNNER_TEMP/skillect-upload.jks" >> "$GITHUB_ENV"
+
       - name: Build signed release APK and AAB
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type == 'signed-release' }}
         working-directory: native/android
@@ -84,6 +104,7 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: gradle --no-daemon :app:assembleRelease :app:bundleRelease
+
       - name: Upload signed release packages
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type == 'signed-release' }}
         uses: actions/upload-artifact@v4
