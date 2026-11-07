@@ -14,10 +14,32 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import java.util.Calendar
+import java.util.GregorianCalendar
+import java.util.TimeZone
 
-private val AuthBlue = Color(0xFF00C878)
+private val AuthBlue = Color(0xFF72B7FF)
 private val AuthInk = Color(0xFFF2F2F2)
-private val AuthBg = Color(0xFF050509)
+private val AuthBg = Color(0xFF07172B)
+private val AuthMuted = Color(0xFF94A3B8)
+
+internal fun isAtLeast16(value: String): Boolean {
+    return try {
+        val parts = value.split("-")
+        if (parts.size != 3) return false
+        val year = parts[0].toInt()
+        val month = parts[1].toInt()
+        val day = parts[2].toInt()
+        val utc = TimeZone.getTimeZone("UTC")
+        val birth = GregorianCalendar(utc).apply { clear(); set(year, month - 1, day); isLenient = false }
+        birth.time
+        val today = Calendar.getInstance(utc)
+        var age = today.get(Calendar.YEAR) - year
+        if (today.get(Calendar.MONTH) < month - 1 ||
+            (today.get(Calendar.MONTH) == month - 1 && today.get(Calendar.DAY_OF_MONTH) < day)) age--
+        age >= 16 && !birth.after(today)
+    } catch (_: Exception) { false }
+}
 
 @Composable
 fun AuthGate(
@@ -32,7 +54,6 @@ fun AuthGate(
     var password by remember { mutableStateOf("") }
     var displayName by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
-    var dob by remember { mutableStateOf("") }
     var localBusy by remember { mutableStateOf(false) }
     var localError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -49,7 +70,7 @@ fun AuthGate(
     ) {
         Text("Skillect", color = AuthBlue, fontSize = 34.sp, fontWeight = FontWeight.ExtraBold)
         Text(
-            "Skills-first social for teens learning and building.",
+            "A worldwide space to share skills, projects and ideas.",
             color = AuthInk,
             modifier = Modifier.padding(top = 6.dp, bottom = 20.dp)
         )
@@ -57,13 +78,13 @@ fun AuthGate(
             Button(
                 onClick = { mode = "signin"; localError = null; onClearError() },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (mode == "signin") AuthBlue else Color(0xFF333344)
+                    containerColor = if (mode == "signin") AuthBlue else Color(0xFF17314F)
                 )
             ) { Text("Sign in") }
             Button(
                 onClick = { mode = "signup"; localError = null; onClearError() },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (mode == "signup") AuthBlue else Color(0xFF333344)
+                    containerColor = if (mode == "signup") AuthBlue else Color(0xFF17314F)
                 )
             ) { Text("Sign up") }
         }
@@ -83,13 +104,11 @@ fun AuthGate(
             OutlinedTextField(displayName, { displayName = it }, label = { Text("Display name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(username, { username = it }, label = { Text("Username") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(dob, { dob = it }, label = { Text("Date of birth (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             Text(
-                "Skillect is for ages 13–19. Your birth date stays private.",
-                color = Color.Gray,
+                "Skillect is for people aged 16 and above. Age is verified during profile setup.",
+                color = AuthMuted,
                 fontSize = 12.sp,
-                modifier = Modifier.padding(top = 6.dp)
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
         err?.let { Text(it, color = Color.Red, modifier = Modifier.padding(top = 10.dp)) }
@@ -101,11 +120,9 @@ fun AuthGate(
                     onClearError()
                     try {
                         if (mode == "signup") {
-                            if (dob.trim().length < 8) error("Enter date of birth as YYYY-MM-DD")
                             val meta = org.json.JSONObject()
                                 .put("display_name", displayName.ifBlank { email.substringBefore("@") })
                                 .put("username", username.ifBlank { "user_" + System.currentTimeMillis().toString().takeLast(6) })
-                                .put("date_of_birth", dob.trim())
                             val body = org.json.JSONObject()
                                 .put("email", email.trim())
                                 .put("password", password)
@@ -139,6 +156,26 @@ fun AuthGate(
                 }
             )
         }
+        if (mode == "signin") {
+            TextButton(
+                onClick = {
+                    scope.launch {
+                        localBusy = true
+                        localError = null
+                        try {
+                            if (email.isBlank()) error("Enter your email address first")
+                            apiPost("/auth/v1/recover", null, org.json.JSONObject().put("email", email.trim()))
+                            localError = "If that account exists, password reset instructions have been sent."
+                        } catch (e: Exception) {
+                            localError = e.message ?: "Could not request a password reset"
+                        }
+                        localBusy = false
+                    }
+                },
+                enabled = !working && email.isNotBlank(),
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Forgot password?") }
+        }
         Spacer(Modifier.height(40.dp))
     }
 }
@@ -160,7 +197,7 @@ fun OnboardingGate(
     var step by remember { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize().background(AuthBg).padding(28.dp)) {
         Text("Finish your profile", color = AuthBlue, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-        Text("Step ${step + 1} of 3", color = Color.Gray, modifier = Modifier.padding(bottom = 16.dp))
+        Text("Step ${step + 1} of 3", color = AuthMuted, modifier = Modifier.padding(bottom = 16.dp))
         when (step) {
             0 -> {
                 OutlinedTextField(displayName, onDisplayName, label = { Text("Display name") }, modifier = Modifier.fillMaxWidth())
@@ -169,7 +206,7 @@ fun OnboardingGate(
             }
             1 -> {
                 OutlinedTextField(dateOfBirth, onDateOfBirth, label = { Text("Date of birth YYYY-MM-DD") }, modifier = Modifier.fillMaxWidth())
-                Text("Required. Ages 13–19 only. Never shown publicly.", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                Text("Required for age verification (16+). Never shown publicly.", color = AuthMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
             }
             else -> {
                 OutlinedTextField(bio, onBio, label = { Text("Short bio") }, modifier = Modifier.fillMaxWidth().height(120.dp))

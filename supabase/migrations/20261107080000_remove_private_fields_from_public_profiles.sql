@@ -1,5 +1,6 @@
--- Keep authentication email in auth.users and remove private identity fields
--- from the publicly readable profile table.
+-- Keep email and date of birth out of public profile reads.
+-- The DOB column remains writable by the authenticated owner so the onboarding
+-- trigger can enforce the minimum age without exposing the value via PostgREST.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -27,6 +28,16 @@ to authenticated
 using ((select auth.uid()) = id)
 with check ((select auth.uid()) = id);
 
-alter table public.profiles
-  drop column if exists email,
-  drop column if exists date_of_birth;
+revoke select on table public.profiles from public, anon, authenticated;
+revoke select (email, date_of_birth) on table public.profiles from public, anon, authenticated;
+grant select (
+  id, display_name, username, avatar_url, cover_url, bio, location, website,
+  skills, interests, country, onboarded, is_private, created_at, updated_at
+) on table public.profiles to anon, authenticated;
+
+revoke insert, update, delete, truncate, references, trigger
+  on table public.profiles from public, anon, authenticated;
+grant update (
+  display_name, username, bio, location, website, skills, interests,
+  avatar_url, cover_url, country, onboarded, is_private, date_of_birth
+) on table public.profiles to authenticated;

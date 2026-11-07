@@ -3,11 +3,36 @@
 
 begin;
 
+create schema if not exists private;
+
 alter table if exists public.conversations
   add column if not exists created_by uuid references auth.users(id);
 
 alter table if exists public.conversations
   alter column created_by set default auth.uid();
+
+create or replace function private.can_send_message(_conversation_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $function$
+  select exists (
+    select 1
+    from public.conversation_participants me
+    join public.conversation_participants them
+      on them.conversation_id = me.conversation_id and them.user_id <> me.user_id
+    where me.conversation_id = _conversation_id and me.user_id = auth.uid()
+      and not exists (
+        select 1 from public.blocks b
+        where (b.blocker_id = auth.uid() and b.blocked_id = them.user_id)
+           or (b.blocker_id = them.user_id and b.blocked_id = auth.uid())
+      )
+  );
+$function$;
+revoke all on function private.can_send_message(uuid) from public, anon;
+grant execute on function private.can_send_message(uuid) to authenticated;
 
 create or replace function public.is_conversation_participant(_conversation_id uuid)
 returns boolean
@@ -49,7 +74,8 @@ create policy "Conversation members can add participants"
 on public.conversation_participants
 for insert to authenticated
 with check (
-  exists (
+  public.is_profile_onboarded()
+  and exists (
     select 1
     from public.conversations conv
     where conv.id = conversation_participants.conversation_id
@@ -68,7 +94,7 @@ using (public.is_conversation_participant(id));
 create policy "Authenticated users create conversations as themselves"
 on public.conversations
 for insert to authenticated
-with check (created_by = auth.uid());
+with check (created_by = auth.uid() and public.is_profile_onboarded());
 
 create policy "Only conversation participants can read messages"
 on public.messages
@@ -81,6 +107,8 @@ for insert to authenticated
 with check (
   sender_id = auth.uid()
   and public.is_conversation_participant(conversation_id)
+  and private.can_send_message(conversation_id)
+  and public.is_profile_onboarded()
 );
 
 commit;
