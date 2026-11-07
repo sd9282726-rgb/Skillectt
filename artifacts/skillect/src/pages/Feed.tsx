@@ -8,6 +8,7 @@ interface PostWithAuthor {
   id: string;
   content: string;
   image_url?: string | null;
+  media_type?: "image" | "video" | "text";
   tags: string[];
   likes_count: number;
   comments_count: number;
@@ -35,6 +36,7 @@ export default function Feed() {
           id,
           content,
           image_url,
+          media_type,
           tags,
           likes_count,
           comments_count,
@@ -89,6 +91,7 @@ export default function Feed() {
               id: post.id,
               content: post.content,
               image: post.image_url ?? undefined,
+              mediaType: post.media_type ?? "text",
               tags: post.tags ?? [],
               likesCount: post.likes_count,
               commentsCount: post.comments_count,
