@@ -82,6 +82,21 @@ Deno.serve(async (request: Request) => {
     return json(503, { error: "Could not verify account status" });
   }
 
+  const communityId = type === "post" && input.community_id ? String(input.community_id) : null;
+  if (communityId) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(communityId)) {
+      return json(400, { error: "Invalid community" });
+    }
+    try {
+      const communities = await rest(base, service, "communities?select=id&id=eq." + encodeURIComponent(communityId) + "&limit=1");
+      if (!Array.isArray(communities) || communities.length === 0) return json(404, { error: "Community not found" });
+      const memberships = await rest(base, service, "community_members?select=id&community_id=eq." + encodeURIComponent(communityId) + "&user_id=eq." + encodeURIComponent(userId) + "&limit=1");
+      if (!Array.isArray(memberships) || memberships.length === 0) return json(403, { error: "Join this community before posting" });
+    } catch {
+      return json(503, { error: "Could not verify community membership" });
+    }
+  }
+
   if (type === "comment" || type === "message") {
     const parentId = String(type === "comment" ? input.post_id || "" : input.conversation_id || "");
     if (!parentId) return json(400, { error: type === "comment" ? "post_id is required" : "conversation_id is required" });
@@ -166,6 +181,7 @@ Deno.serve(async (request: Request) => {
       image_url: imageUrl,
     };
     if (input.category) record.category = String(input.category).slice(0, 64);
+    if (communityId) record.community_id = communityId;
   } else if (type === "comment") {
     record = { post_id: String(input.post_id), author_id: userId, content };
     if (input.parent_id) record.parent_id = String(input.parent_id);
