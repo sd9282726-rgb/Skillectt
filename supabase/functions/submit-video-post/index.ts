@@ -55,12 +55,7 @@ Deno.serve(async (request: Request) => {
   const bytes = await source.arrayBuffer();
   if (!bytes.byteLength || bytes.byteLength > 50 * 1024 * 1024) return json(413, { error: "Video must be 50 MB or smaller" });
 
-  const publicUpload = await fetch(base + "/storage/v1/object/post-media/" + encoded, {
-    method: "POST",
-    headers: { ...adminHeaders(service), "Content-Type": mimeByExt[extension], "x-upsert": "false" },
-    body: bytes,
-  });
-  if (!publicUpload.ok) return json(503, { error: "Could not publish the video file" });
+  // Keep the video in private quarantine until screening or moderator approval.
   const publicUrl = base + "/storage/v1/object/public/post-media/" + storagePath;
   const callbackToken = crypto.randomUUID() + crypto.randomUUID();
   const assetResponse = await fetch(base + "/rest/v1/media_assets", {
