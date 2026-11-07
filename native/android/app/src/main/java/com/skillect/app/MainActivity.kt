@@ -355,11 +355,8 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
 
     suspend fun loadPersonPosts(personId: String) {
         try {
-            val arr = apiArray("/rest/v1/posts?select=id,author_id,content,image_url,media_type,likes_count,comments_count,profiles(display_name,username),media_assets(public_url,media_type,status)&author_id=eq.$personId&moderation_hidden=eq.false&order=created_at.desc&limit=30", token)
-            selectedPersonPosts = (0 until arr.length()).map { i ->
-                val p = arr.getJSONObject(i); val profile = p.optJSONObject("profiles") ?: JSONObject()
-                Post(p.optString("id"), p.optString("author_id"), p.optString("content"), profile.optString("display_name", "Skillect member"), profile.optString("username", "member"), p.optString("image_url").takeIf { it.isNotBlank() }, p.optJSONArray("media_assets")?.let { assets -> (0 until assets.length()).map { assets.getJSONObject(it) }.firstOrNull { it.optString("status") == "approved" }?.optString("public_url")?.takeIf { it.isNotBlank() } }, p.optString("media_type", "text"), p.optInt("likes_count"), p.optInt("comments_count"))
-            }
+            val arr = apiArray("/rest/v1/posts?select=id,author_id,content,image_url,media_type,likes_count,comments_count,profiles(display_name,username)&author_id=eq.$personId&moderation_hidden=eq.false&order=created_at.desc&limit=30", token)
+            selectedPersonPosts = (0 until arr.length()).map { i -> postFromJson(arr.getJSONObject(i)) }
         } catch (e: Exception) { error = e.message }
     }
 
