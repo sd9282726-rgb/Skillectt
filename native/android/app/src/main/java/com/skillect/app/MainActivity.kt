@@ -88,7 +88,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     var userId by remember { mutableStateOf<String?>(null) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var onboarded by remember { mutableStateOf(true) }
+    var onboarded by remember { mutableStateOf(false) }
     var dateOfBirth by remember { mutableStateOf("") }
     var communityName by remember { mutableStateOf("") }
     var communityDesc by remember { mutableStateOf("") }
@@ -124,7 +124,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
     val scope = rememberCoroutineScope()
 
     fun requireAccount(): Boolean {
-        if (token == null) { showAuthPrompt = true; return false }
+        if (token == null || !onboarded) { showAuthPrompt = true; return false }
         return true
     }
 
@@ -149,7 +149,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                 displayName = p.optString("display_name")
                 username = p.optString("username")
                 bio = p.optString("bio")
-                onboarded = p.optBoolean("onboarded", true)
+                onboarded = p.optBoolean("onboarded", false)
                 if (!onboarded) tab = "Profile"
                 isPrivate = p.optBoolean("is_private", false)
             } else {
@@ -704,7 +704,7 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                     "Communities" -> LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
                         item {
                             Text("Communities",fontSize=20.sp,fontWeight=FontWeight.Bold,color=Ink)
-                            if (token != null) CommunityCreateForm(
+                            if (token != null && onboarded) CommunityCreateForm(
                                 name = communityName,
                                 onName = { communityName = it },
                                 description = communityDesc,
@@ -751,9 +751,9 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
 
     if (showAuthPrompt) AlertDialog(
         onDismissRequest = { showAuthPrompt = false },
-        title = { Text("Join Skillect") },
-        text = { Text("You can explore public posts and communities without an account. Create a profile or sign in to like, comment, follow, post, save, or message.") },
-        confirmButton = { TextButton(onClick = { showAuthPrompt = false; tab = "Profile" }) { Text("Go to Profile") } },
+        title = { Text(if (token == null) "Join Skillect" else "Complete your profile") },
+        text = { Text(if (token == null) "You can explore public posts and communities without an account. Create a profile or sign in to interact." else "Complete your profile and verify that you are 16 or older before you like, comment, follow, post, save, join communities, or message.") },
+        confirmButton = { TextButton(onClick = { showAuthPrompt = false; tab = "Profile" }) { Text(if (token == null) "Go to Profile" else "Complete profile") } },
         dismissButton = { TextButton(onClick = { showAuthPrompt = false }) { Text("Not now") } }
     )
 
