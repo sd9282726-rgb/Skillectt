@@ -587,6 +587,15 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                                     }
                                 }
                             }
+                            item { Text("Public projects", color=Ink, fontWeight=FontWeight.Bold, fontSize=18.sp, modifier=Modifier.padding(top=18.dp, bottom=6.dp)) }
+                            items(projects, key = { "project-" + it.id }) { project ->
+                                Card(colors=CardDefaults.cardColors(containerColor=NavySurface), shape=RoundedCornerShape(16.dp), modifier=Modifier.fillMaxWidth()) {
+                                    Column(Modifier.padding(14.dp)) {
+                                        Text(project.title, color=Ink, fontWeight=FontWeight.Bold)
+                                        Text(project.detail, color=MutedNav, modifier=Modifier.padding(top=4.dp))
+                                    }
+                                }
+                            }
                         }
                     }
                     "Create" -> {
