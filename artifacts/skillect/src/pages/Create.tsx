@@ -85,8 +85,6 @@ export default function Create() {
     setSuccess(null);
 
     try {
-      let postId: string | null = null;
-
       if (!file) {
         const { data, error: moderationError } = await supabase.functions.invoke("moderate-text", {
           body: { type: "post", content: content.trim(), tags, category: category || null },
@@ -95,7 +93,6 @@ export default function Create() {
         if (data?.status !== "approved" || !data?.id) {
           throw new Error(data?.error || "Your post did not pass Skillect's safety check.");
         }
-        postId = data.id;
       } else {
         if (file.type.startsWith("image/")) {
           const form = new FormData();
@@ -104,7 +101,6 @@ export default function Create() {
           const { data, error: mediaError } = await supabase.functions.invoke("moderate-media", { body: form });
           if (mediaError) throw new Error(mediaError.message || "Image could not be submitted for screening.");
           if (!data?.post_id) throw new Error(data?.error || "Image post could not be created.");
-          postId = data.post_id;
         } else {
           const extension = file.name.split(".").pop()?.toLowerCase() || "mp4";
           const path = `${user.id}/${crypto.randomUUID()}.${extension}`;
@@ -120,7 +116,6 @@ export default function Create() {
             await supabase.storage.from("media-quarantine").remove([path]);
             throw new Error(videoError?.message || data?.error || "Video could not be submitted for screening.");
           }
-          postId = data.post_id;
         }
       }
 
