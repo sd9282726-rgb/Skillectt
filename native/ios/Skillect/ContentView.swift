@@ -539,26 +539,6 @@ struct CommunitiesView: View {
     }
 }
 
-struct NotificationsView: View {
-    @ObservedObject var model: AppModel
-    var body: some View {
-        NavigationStack {
-            List(model.notifications) { notification in
-                Button { Task { await model.markNotificationRead(notification.id) } } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(notification.message ?? notification.type.capitalized).foregroundStyle(.primary)
-                            Text(notification.type).font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if !notification.read { Circle().fill(skillectBlue).frame(width: 8, height: 8) }
-                    }
-                }
-            }.navigationTitle("Notifications").task { await model.loadDirectory() }
-        }
-    }
-}
-
 
 struct ModerationView: View {
  @ObservedObject var model: AppModel
