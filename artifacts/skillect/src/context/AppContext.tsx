@@ -101,15 +101,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateProfile = async (update: Partial<Profile>): Promise<Profile | null> => {
     if (!user) return null;
 
+    const { data: moderation, error: moderationError } = await supabase.functions.invoke("moderate-text", {
+      body: { type: "profile", ...update },
+    });
+
+    if (moderationError || moderation?.status !== "approved") {
+      console.error("Profile update did not pass moderation", moderationError || moderation?.error);
+      return null;
+    }
+
     const { data, error } = await supabase
       .from("profiles")
-      .update(update)
+      .select("id,display_name,username,avatar_url,cover_url,bio,location,website,skills,interests,country,onboarded,is_private,created_at,updated_at")
       .eq("id", user.id)
-      .select()
       .single();
 
-    if (error) {
-      console.error("Failed to update profile", error);
+    if (error || !data) {
+      console.error("Profile passed moderation but could not be reloaded", error);
       return null;
     }
 
