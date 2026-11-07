@@ -27,6 +27,8 @@ export default function Conversation({ id }: { id: string }) {
   const [other, setOther] = useState<OtherUser | null>(null);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -84,15 +86,21 @@ export default function Conversation({ id }: { id: string }) {
   }, [messages.length]);
 
   const handleSend = async () => {
-    if (!text.trim() || !user) return;
+    if (!text.trim() || !user || sending) return;
     const content = text.trim();
-    setText("");
+    setSending(true);
+    setActionError(null);
 
-    await supabase.from("messages").insert({
-      conversation_id: id,
-      sender_id: user.id,
-      content,
+    const { error } = await supabase.functions.invoke("moderate-text", {
+      body: { type: "message", conversation_id: id, content },
     });
+
+    if (error) {
+      setActionError(error.message || "Message could not be sent.");
+    } else {
+      setText("");
+    }
+    setSending(false);
   };
 
   if (loading) {
@@ -153,6 +161,7 @@ export default function Conversation({ id }: { id: string }) {
         <div ref={bottomRef} />
       </div>
 
+      {actionError && <p role="alert" className="px-4 pt-2 text-xs text-red-600">{actionError}</p>}
       <div className="flex gap-2 px-4 md:px-6 py-3 border-t border-gray-200">
         <input
           value={text}
@@ -164,7 +173,7 @@ export default function Conversation({ id }: { id: string }) {
         <button
           type="button"
           onClick={handleSend}
-          disabled={!text.trim()}
+          disabled={!text.trim() || sending}
           className="h-10 w-10 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 disabled:opacity-40"
         >
           <Send className="h-4 w-4" />
