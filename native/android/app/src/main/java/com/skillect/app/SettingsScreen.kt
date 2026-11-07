@@ -31,7 +31,7 @@ fun SettingsScreen(
             Text("Privacy and account controls", color = Color.Gray, fontSize = 13.sp)
         }
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF15151D))) {
+            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF10243D))) {
                 Row(
                     Modifier.fillMaxWidth().padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -53,7 +53,7 @@ fun SettingsScreen(
             item { Text("No blocked accounts.", color = Color.Gray) }
         } else {
             items(blocked, key = { it.id }) { person ->
-                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF15151D))) {
+                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF10243D))) {
                     Row(
                         Modifier.fillMaxWidth().padding(14.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
