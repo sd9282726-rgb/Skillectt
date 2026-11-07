@@ -159,6 +159,8 @@ private fun SkillectApp(initialToken: String?, onToken: (String) -> Unit, onSign
                 displayName = p.optString("display_name")
                 username = p.optString("username")
                 bio = p.optString("bio")
+                skillsText = jsonArrayToCsv(p.optJSONArray("skills"))
+                interestsText = jsonArrayToCsv(p.optJSONArray("interests"))
                 onboarded = p.optBoolean("onboarded", false)
                 if (!onboarded) tab = "Profile"
                 isPrivate = p.optBoolean("is_private", false)
